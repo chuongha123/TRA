@@ -145,7 +145,7 @@ class ProfileScreen extends StatelessWidget {
           ),
           child: const Center(
             child: Text(
-              'JD',
+              'CHE',
               style: TextStyle(
                 fontSize: 36,
                 fontWeight: FontWeight.bold,

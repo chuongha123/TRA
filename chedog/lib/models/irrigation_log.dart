@@ -23,7 +23,7 @@ class IrrigationLog {
   });
 
   Duration? get duration =>
-      endTime != null ? endTime!.difference(startTime) : null;
+      endTime?.difference(startTime);
 
   String get durationFormatted {
     if (duration == null) return 'Đang tưới...';
@@ -38,7 +38,7 @@ class IrrigationLog {
       case 'manual':
         return 'Thủ công';
       case 'schedule':
-        return 'Lịch: ${scheduleName ?? ""}';
+        return 'Lịch';
       case 'auto':
         return 'Tự động (cảm biến)';
       default:

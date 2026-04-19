@@ -22,22 +22,23 @@ class WeatherForecast {
   });
 
   bool get mayRain => rainProbability >= 50 || rainSum >= 1;
+  bool get shouldTriggerRainAlert => rainProbability >= 70;
 
   String get summary {
     final weatherLabel = _mapWeatherCode(weatherCode);
     return '$weatherLabel, ${minTemp.toStringAsFixed(1)}-${maxTemp.toStringAsFixed(1)}°C, '
-        'mua ${rainProbability.toStringAsFixed(0)}%';
+        'mưa ${rainProbability.toStringAsFixed(0)}%';
   }
 
   static String _mapWeatherCode(int code) {
-    if (code == 0) return 'Troi quang';
-    if (code >= 1 && code <= 3) return 'Nhieu may';
-    if (code >= 45 && code <= 48) return 'Suong mu';
-    if (code >= 51 && code <= 67) return 'Mua nho';
-    if (code >= 71 && code <= 77) return 'Tuyet';
-    if (code >= 80 && code <= 82) return 'Mua rao';
-    if (code >= 95 && code <= 99) return 'Mua dong, giong';
-    return 'Thoi tiet thay doi';
+    if (code == 0) return 'Trời quang';
+    if (code >= 1 && code <= 3) return 'Nhiều mây';
+    if (code >= 45 && code <= 48) return 'Sương mù';
+    if (code >= 51 && code <= 67) return 'Mưa nhỏ';
+    if (code >= 71 && code <= 77) return 'Tuyết';
+    if (code >= 80 && code <= 82) return 'Mưa rào';
+    if (code >= 95 && code <= 99) return 'Mưa dông, giông';
+    return 'Thời tiết thay đổi';
   }
 }
 
@@ -100,12 +101,12 @@ class WeatherService {
 
   String buildDrainageAdvice(WeatherForecast forecast) {
     if (forecast.mayRain) {
-      return 'Ngay mai co mua, hay don sach duong muong. '
-          'Cach xu ly: 1) Vot rac, la cay, bun tai mieng muong. '
-          '2) Khoi thong cac diem tac va mo duong thoat nuoc xuong kenh chinh. '
-          '3) Gia co bo muong, dat bao cat tai diem thap de tranh tran nuoc vao vuon.';
+      return 'Ngày mai có mưa, hãy dọn sạch đường mương. '
+          'Cách xử lý: 1) Vớt rác, lá cây, bùn tại miệng mương. '
+          '2) Khơi thông các điểm tắc và mở đường thoát nước xuống kênh chính. '
+          '3) Gia cố bờ mương, đặt bao cát tại điểm thấp để tránh tràn nước vào vườn.';
     }
-    return 'Ngay mai it kha nang mua, nen kiem tra he thong tuoi va bo sung nuoc hop ly.';
+    return 'Ngày mai ít khả năng mưa, nên kiểm tra hệ thống tưới và bổ sung nước hợp lý.';
   }
 
   WeatherForecast _fallbackForecast() {

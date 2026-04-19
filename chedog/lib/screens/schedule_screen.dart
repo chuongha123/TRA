@@ -156,14 +156,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
         ),
         child: const Icon(Icons.delete_outline, color: Colors.white, size: 28),
       ),
-      onDismissed: (_) {
-        provider.deleteSchedule(schedule.id);
-        ScaffoldMessenger.of(context).showSnackBar(
+      onDismissed: (_) async {
+        final messenger = ScaffoldMessenger.of(context);
+        await provider.deleteSchedule(schedule.id);
+        messenger.showSnackBar(
           SnackBar(
             content: Text('Đã xóa "${schedule.name}"'),
             action: SnackBarAction(
               label: 'Hoàn tác',
-              onPressed: () => provider.addSchedule(schedule),
+              onPressed: () async {
+                await provider.addSchedule(schedule);
+              },
             ),
           ),
         );
@@ -205,7 +208,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                     Switch.adaptive(
                       value: schedule.isEnabled,
                       activeColor: AppColors.primary,
-                      onChanged: (_) => provider.toggleSchedule(schedule.id),
+                      onChanged: (_) async {
+                        await provider.toggleSchedule(schedule.id);
+                      },
                     ),
                   ],
                 ),
@@ -448,7 +453,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       if (nameCtrl.text.trim().isEmpty) {
                         ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
                             content: Text('Vui lòng nhập tên lịch')));
@@ -464,10 +469,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
                         isEnabled: existing?.isEnabled ?? true,
                       );
                       if (isEdit) {
-                        provider.updateSchedule(s);
+                        await provider.updateSchedule(s);
                       } else {
-                        provider.addSchedule(s);
+                        await provider.addSchedule(s);
                       }
+                      if (!ctx.mounted) return;
                       Navigator.pop(ctx);
                     },
                     style: ElevatedButton.styleFrom(

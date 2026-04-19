@@ -56,7 +56,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
       if (!mounted) return;
 
       final sensorProvider = context.read<SensorProvider>();
-      if (forecast.mayRain) {
+      if (forecast.shouldTriggerRainAlert) {
         sensorProvider.addWeatherRainAlert(
           message: advice,
           forecastDate: forecast.date,
@@ -77,7 +77,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
     } on TimeoutException {
       if (!mounted) return;
       setState(() {
-        _error = 'He thong phan hoi cham. Vui long thu lai.';
+        _error = 'Hệ thống phản hồi chậm. Vui lòng thử lại.';
         _isLoading = false;
       });
     } catch (e) {
@@ -93,7 +93,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Du bao thoi tiet'),
+        title: const Text('Dự báo thời tiết'),
         actions: [
           IconButton(
             onPressed: _isLoading ? null : _loadWeatherAndAdvice,
@@ -120,7 +120,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
               const Icon(Icons.cloud_off, size: 56),
               const SizedBox(height: 12),
               const Text(
-                'Khong tai duoc du bao thoi tiet',
+                'Không tải được dự báo thời tiết',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 6),
@@ -132,7 +132,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
               const SizedBox(height: 14),
               FilledButton(
                 onPressed: _loadWeatherAndAdvice,
-                child: const Text('Thu lai'),
+                child: const Text('Thử lại'),
               )
             ],
           ),
@@ -153,22 +153,22 @@ class _WeatherScreenState extends State<WeatherScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Du bao ngay mai - $dateText',
+                  'Dự báo ngày mai - $dateText',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                   ),
                 ),
                 const SizedBox(height: 6),
-                Text('Khu vuc: $_locationLabel'),
+                Text('Khu vực: $_locationLabel'),
                 const SizedBox(height: 10),
-                _metricRow('Nhiet do',
+                _metricRow('Nhiệt độ',
                     '${forecast.minTemp.toStringAsFixed(1)}°C - ${forecast.maxTemp.toStringAsFixed(1)}°C'),
-                _metricRow('Xac suat mua',
+                _metricRow('Xác suất mưa',
                     '${forecast.rainProbability.toStringAsFixed(0)}%'),
                 _metricRow(
-                    'Luong mua du kien', '${forecast.rainSum.toStringAsFixed(1)} mm'),
-                _metricRow('Tong quan', forecast.summary),
+                    'Lượng mưa dự kiến', '${forecast.rainSum.toStringAsFixed(1)} mm'),
+                _metricRow('Tổng quan', forecast.summary),
               ],
             ),
           ),
@@ -191,7 +191,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 Expanded(
                   child: Text(
                     _advice ??
-                        'Khong co khuyen nghi tu AI, vui long tai lai du bao.',
+                        'Không có khuyến nghị từ AI, vui lòng tải lại dự báo.',
                     style: const TextStyle(fontSize: 14, height: 1.4),
                   ),
                 ),
@@ -208,15 +208,15 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: const [
                   Text(
-                    'Cach xu ly muong nuoc de tranh ngap',
+                    'Cách xử lý mương nước để tránh ngập',
                     style: TextStyle(fontWeight: FontWeight.bold),
                   ),
                   SizedBox(height: 8),
-                  Text('1. Vot sach rac, la cay, bun o mieng va day muong.'),
+                  Text('1. Vớt sạch rác, lá cây, bùn ở miệng và đáy mương.'),
                   SizedBox(height: 4),
-                  Text('2. Khoi thong cac diem tac va mo duong thoat nuoc chinh.'),
+                  Text('2. Khơi thông các điểm tắc và mở đường thoát nước chính.'),
                   SizedBox(height: 4),
-                  Text('3. Gia co bo muong, dat bao cat tai cac diem thap.'),
+                  Text('3. Gia cố bờ mương, đặt bao cát tại các điểm thấp.'),
                 ],
               ),
             ),
@@ -225,14 +225,14 @@ class _WeatherScreenState extends State<WeatherScreen> {
         const SizedBox(height: 12),
         if (forecast.isFallback)
           Text(
-            'Dang dung du lieu du phong vi khong ket noi duoc API thoi tiet.',
+            'Đang dùng dữ liệu dự phòng vì không kết nối được API thời tiết.',
             style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
           ),
         if (forecast.isFallback) const SizedBox(height: 8),
         if (!_usingDeviceLocation && _locationFallbackReason != null) ...[
           const SizedBox(height: 4),
           Text(
-            'Ly do: $_locationFallbackReason',
+            'Lý do: $_locationFallbackReason',
             style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
           ),
         ]

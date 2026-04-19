@@ -51,7 +51,6 @@ class AppConstants {
   static const String deviceTypeValve = 'valve';            // Van tưới
   static const String deviceTypeSoilSensor = 'soil_sensor'; // Cảm biến độ ẩm đất
   static const String deviceTypeTempHumid = 'temp_humid';   // Cảm biến nhiệt độ/độ ẩm
-  static const String deviceTypeLightSensor = 'light_sensor'; // Cảm biến ánh sáng
   static const String deviceTypeController = 'controller';   // Bộ điều khiển ESP32
   
   // Zones - Các khu vực canh tác
@@ -66,8 +65,6 @@ class AppConstants {
   static const String sensorTypeSoilMoisture = 'soil_moisture';     // Độ ẩm đất
   static const String sensorTypeTemperature = 'temperature';         // Nhiệt độ
   static const String sensorTypeHumidity = 'humidity';               // Độ ẩm không khí
-  static const String sensorTypeLightIntensity = 'light_intensity'; // Cường độ ánh sáng
-  static const String sensorTypeWaterLevel = 'water_level';          // Mực nước
   
   // Time Format
   static const String dateFormat = 'dd/MM/yyyy';

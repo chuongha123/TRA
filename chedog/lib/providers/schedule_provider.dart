@@ -1,6 +1,8 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import '../services/background_schedule_service.dart';
 import 'sensor_provider.dart';
 
 /// Schedule Item - Lịch tưới nước
@@ -63,10 +65,51 @@ class IrrigationSchedule {
       isEnabled: isEnabled ?? this.isEnabled,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'hour': time.hour,
+      'minute': time.minute,
+      'days': days,
+      'durationMinutes': durationMinutes,
+      'zone': zone,
+      'isEnabled': isEnabled,
+    };
+  }
+
+  factory IrrigationSchedule.fromJson(Map<String, dynamic> json) {
+    final rawDays = (json['days'] as List?) ?? <dynamic>[];
+    final parsedDays = List<bool>.generate(7, (index) {
+      if (index >= rawDays.length) {
+        return false;
+      }
+      final value = rawDays[index];
+      if (value is bool) return value;
+      return value == true;
+    });
+
+    return IrrigationSchedule(
+      id: (json['id'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
+      time: TimeOfDay(
+        hour: (json['hour'] as num?)?.toInt() ?? 0,
+        minute: (json['minute'] as num?)?.toInt() ?? 0,
+      ),
+      days: parsedDays,
+      durationMinutes: (json['durationMinutes'] as num?)?.toInt() ?? 1,
+      zone: (json['zone'] ?? '').toString(),
+      isEnabled: json['isEnabled'] == true,
+    );
+  }
 }
 
 /// Schedule Provider - Quản lý lịch tưới
 class ScheduleProvider with ChangeNotifier {
+  static const String _schedulesStorageKey = 'irrigation_schedules';
+  static const String _lastEngineCheckStorageKey = 'schedule_last_engine_check';
+
   SensorProvider _sensorProvider;
   final List<IrrigationSchedule> _schedules = [];
   List<IrrigationSchedule> get schedules => List.unmodifiable(_schedules);
@@ -74,11 +117,161 @@ class ScheduleProvider with ChangeNotifier {
   final Map<String, String> _lastTriggerMinuteBySchedule = {};
 
   ScheduleProvider(this._sensorProvider) {
-    _startScheduleEngine();
+    _initialize();
   }
 
   void updateSensorProvider(SensorProvider sensorProvider) {
     _sensorProvider = sensorProvider;
+  }
+
+  Future<void> _initialize() async {
+    await _loadSchedules();
+    await _syncBackgroundSchedules();
+    await _runMissedScheduleIfAny();
+    _startScheduleEngine();
+    notifyListeners();
+  }
+
+  Future<void> _loadSchedules() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_schedulesStorageKey);
+    if (raw == null || raw.isEmpty) {
+      return;
+    }
+
+    try {
+      final decoded = jsonDecode(raw) as List<dynamic>;
+      _schedules
+        ..clear()
+        ..addAll(
+          decoded
+              .whereType<Map<String, dynamic>>()
+              .map(IrrigationSchedule.fromJson),
+        );
+    } catch (_) {
+      _schedules.clear();
+    }
+  }
+
+  Future<void> _persistSchedules() async {
+    final prefs = await SharedPreferences.getInstance();
+    final payload = jsonEncode(_schedules.map((s) => s.toJson()).toList());
+    await prefs.setString(_schedulesStorageKey, payload);
+  }
+
+  Future<void> _syncBackgroundSchedules() async {
+    await BackgroundScheduleService.syncSchedules(
+      _schedules.map((s) => s.toJson()).toList(),
+    );
+  }
+
+  Future<void> _persistAndSyncSchedules() async {
+    await _persistSchedules();
+    await _syncBackgroundSchedules();
+  }
+
+  Future<void> _saveLastEngineCheck(DateTime time) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_lastEngineCheckStorageKey, time.toIso8601String());
+  }
+
+  Future<void> _runMissedScheduleIfAny() async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final lastCheckRaw = prefs.getString(_lastEngineCheckStorageKey);
+    final lastCheck =
+        lastCheckRaw != null ? DateTime.tryParse(lastCheckRaw) : null;
+
+    if (lastCheck == null) {
+      await _saveLastEngineCheck(now);
+      return;
+    }
+
+    // Ignore stale windows too far in the past.
+    if (now.difference(lastCheck) > const Duration(days: 2)) {
+      await _saveLastEngineCheck(now);
+      return;
+    }
+
+    IrrigationSchedule? latestSchedule;
+    DateTime? latestOccurrence;
+    for (final schedule in _schedules) {
+      if (!schedule.isEnabled) continue;
+      final occurrence = _findLatestOccurrenceBetween(
+        schedule: schedule,
+        fromExclusive: lastCheck,
+        toInclusive: now,
+      );
+      if (occurrence == null) continue;
+
+      if (latestOccurrence == null || occurrence.isAfter(latestOccurrence)) {
+        latestOccurrence = occurrence;
+        latestSchedule = schedule;
+      }
+    }
+
+    if (latestSchedule != null && latestOccurrence != null) {
+      final minuteKey =
+          '${latestOccurrence.year}-${latestOccurrence.month}-${latestOccurrence.day}-${latestOccurrence.hour}-${latestOccurrence.minute}';
+      _lastTriggerMinuteBySchedule[latestSchedule.id] = minuteKey;
+      _sensorProvider.runScheduledIrrigation(
+        durationMinutes: latestSchedule.durationMinutes,
+        scheduleName: latestSchedule.name,
+        zone: latestSchedule.zone,
+      );
+    }
+
+    await _saveLastEngineCheck(now);
+  }
+
+  DateTime? _findLatestOccurrenceBetween({
+    required IrrigationSchedule schedule,
+    required DateTime fromExclusive,
+    required DateTime toInclusive,
+  }) {
+    final startDate = DateTime(
+      fromExclusive.year,
+      fromExclusive.month,
+      fromExclusive.day,
+    );
+    final endDate = DateTime(
+      toInclusive.year,
+      toInclusive.month,
+      toInclusive.day,
+    );
+
+    DateTime? latest;
+    for (
+      DateTime day = startDate;
+      !day.isAfter(endDate);
+      day = day.add(const Duration(days: 1))
+    ) {
+      final weekdayIndex = (day.weekday + 6) % 7; // Monday=0 ... Sunday=6
+      if (!schedule.days[weekdayIndex]) {
+        continue;
+      }
+
+      final occurrence = DateTime(
+        day.year,
+        day.month,
+        day.day,
+        schedule.time.hour,
+        schedule.time.minute,
+      );
+
+      final inRange = occurrence.isAfter(fromExclusive) &&
+          (occurrence.isAtSameMomentAs(toInclusive) ||
+              occurrence.isBefore(toInclusive));
+      if (!inRange) {
+        continue;
+      }
+
+      if (latest == null || occurrence.isAfter(latest)) {
+        latest = occurrence;
+      }
+    }
+
+    return latest;
   }
 
   void _startScheduleEngine() {
@@ -116,35 +309,43 @@ class ScheduleProvider with ChangeNotifier {
         zone: schedule.zone,
       );
     }
+
+    unawaited(_saveLastEngineCheck(now));
   }
 
   void onAppResumed() {
+    unawaited(_runMissedScheduleIfAny());
     _checkAndRunSchedules();
   }
 
-  void addSchedule(IrrigationSchedule schedule) {
+  Future<void> addSchedule(IrrigationSchedule schedule) async {
     _schedules.add(schedule);
+    await _persistAndSyncSchedules();
     notifyListeners();
   }
 
-  void updateSchedule(IrrigationSchedule updated) {
+  Future<void> updateSchedule(IrrigationSchedule updated) async {
     final idx = _schedules.indexWhere((s) => s.id == updated.id);
     if (idx != -1) {
       _schedules[idx] = updated;
+      await _persistAndSyncSchedules();
       notifyListeners();
     }
   }
 
-  void toggleSchedule(String id) {
+  Future<void> toggleSchedule(String id) async {
     final idx = _schedules.indexWhere((s) => s.id == id);
     if (idx != -1) {
       _schedules[idx].isEnabled = !_schedules[idx].isEnabled;
+      await _persistAndSyncSchedules();
       notifyListeners();
     }
   }
 
-  void deleteSchedule(String id) {
+  Future<void> deleteSchedule(String id) async {
     _schedules.removeWhere((s) => s.id == id);
+    _lastTriggerMinuteBySchedule.remove(id);
+    await _persistAndSyncSchedules();
     notifyListeners();
   }
 

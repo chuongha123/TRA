@@ -7,6 +7,7 @@ import '../constants/app_constants.dart';
 import '../models/sensor_data.dart';
 import '../models/irrigation_log.dart';
 import '../services/location_service.dart';
+import '../services/notification_service.dart';
 import '../services/weather_service.dart';
 
 /// Sensor Provider - Quản lý dữ liệu cảm biến và bơm nước
@@ -24,6 +25,7 @@ class SensorProvider with ChangeNotifier {
   final Set<String> _historyFetchingKeys = {};
   final WeatherService _weatherService = WeatherService();
   final LocationService _locationService = LocationService();
+  final NotificationService _notificationService = NotificationService();
 
   // ─── Trạng thái bơm ───────────────────────────────────────────────────────
   bool _isPumpOn = false;
@@ -71,6 +73,12 @@ class SensorProvider with ChangeNotifier {
   List<Map<String, dynamic>> get alerts => List.unmodifiable(_alerts);
   int get unreadAlertCount => _alerts.where((a) => !(a['isRead'] as bool)).length;
 
+  // ─── Tự động tưới theo độ ẩm ─────────────────────────────────────────────
+  bool _isAutoPumping = false;
+  DateTime? _lastAutoPumpTime;
+
+  bool get isAutoPumping => _isAutoPumping;
+
   // ─── Lịch sử tưới nước ────────────────────────────────────────────────────
   final List<IrrigationLog> _irrigationLogs = [];
   List<IrrigationLog> get irrigationLogs => List.unmodifiable(_irrigationLogs);
@@ -79,10 +87,12 @@ class SensorProvider with ChangeNotifier {
   final Map<String, List<ChartDataPoint>> _historicalData = {};
 
   SensorProvider() {
-    _fetchAlerts();
-    _fetchLatestReadings();
-    _fetchLatestPumpState();
-    _fetchIrrigationSessions();
+    _loadThresholds().then((_) {
+      _fetchAlerts();
+      _fetchLatestReadings();
+      _fetchLatestPumpState();
+      _fetchIrrigationSessions();
+    });
     _refreshTimer = Timer.periodic(
       const Duration(seconds: 5),
       (_) {
@@ -110,6 +120,12 @@ class SensorProvider with ChangeNotifier {
     
     final nextState = !_isPumpOn;
     
+    // Người dùng tắt bơm thủ công → hủy chế độ tự động
+    if (!nextState && _isAutoPumping) {
+      _isAutoPumping = false;
+      _lastAutoPumpTime = DateTime.now(); // reset cooldown từ lúc tắt thủ công
+    }
+
     _isTogglingPump = true;
     _pumpErrorMessage = null;
     notifyListeners();
@@ -165,8 +181,25 @@ class SensorProvider with ChangeNotifier {
   }
 
   // ─── Cập nhật ngưỡng ──────────────────────────────────────────────────────
+  Future<void> _loadThresholds() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final key in _thresholds.keys.toList()) {
+      final saved = prefs.getDouble('threshold_$key');
+      if (saved != null) _thresholds[key] = saved;
+    }
+    notifyListeners();
+  }
+
+  Future<void> _saveThresholds() async {
+    final prefs = await SharedPreferences.getInstance();
+    for (final entry in _thresholds.entries) {
+      await prefs.setDouble('threshold_${entry.key}', entry.value);
+    }
+  }
+
   void updateThreshold(String type, double value) {
     _thresholds[type] = value;
+    unawaited(_saveThresholds());
     _evaluateThresholdAlerts();
     notifyListeners();
   }
@@ -247,6 +280,10 @@ class SensorProvider with ChangeNotifier {
     } else {
       _alerts.insert(0, alert);
       unawaited(_createAlertOnServer(alert));
+      unawaited(_notificationService.showNotification(
+        title: alert['title'] as String,
+        body: alert['message'] as String,
+      ));
     }
     notifyListeners();
   }
@@ -435,7 +472,7 @@ class SensorProvider with ChangeNotifier {
 
       final advice = _weatherService.buildDrainageAdvice(forecast);
 
-      if (forecast.mayRain) {
+      if (forecast.shouldTriggerRainAlert) {
         addWeatherRainAlert(
           message: advice,
           forecastDate: forecast.date,
@@ -573,6 +610,8 @@ class SensorProvider with ChangeNotifier {
       zone: 'Vườn rau A',
       isTriggered: (value, threshold) => value < threshold,
     );
+
+    _checkAutoIrrigation();
   }
 
   void _checkThreshold({
@@ -611,12 +650,66 @@ class SensorProvider with ChangeNotifier {
           'isRead': false,
         },
       );
-      unawaited(_createAlertOnServer(_alerts.first));
+      final newAlert = _alerts.first;
+      unawaited(_createAlertOnServer(newAlert));
+      unawaited(_notificationService.showNotification(
+        title: newAlert['title'] as String,
+        body: newAlert['message'] as String,
+      ));
       _activeThresholdAlerts.add(key);
       return;
     }
 
     _activeThresholdAlerts.remove(key);
+  }
+
+  /// Tự động bật/tắt bơm dựa theo độ ẩm đất.
+  /// - Bật khi: độ ẩm < ngưỡng AND bơm đang tắt AND cooldown 30 phút đã qua.
+  /// - Tắt khi: độ ẩm >= ngưỡng AND đang bơm tự động.
+  void _checkAutoIrrigation() {
+    final moisture = _currentReadings['soil_moisture'];
+    final threshold = _thresholds['soil_moisture'];
+    if (moisture == null || threshold == null) return;
+
+    final belowThreshold = moisture < threshold;
+
+    if (belowThreshold) {
+      // Đã bơm rồi (tự động hoặc thủ công) → không bật thêm
+      if (_isPumpOn) return;
+      // Kiểm tra cooldown 30 phút
+      if (_lastAutoPumpTime != null &&
+          DateTime.now().difference(_lastAutoPumpTime!) <
+              const Duration(minutes: 30)) {
+        return;
+      }
+
+      // Bật bơm tự động
+      _isAutoPumping = true;
+      _lastAutoPumpTime = DateTime.now();
+      final startTime = DateTime.now();
+      _sendPumpToggle(true, triggeredBy: 'auto_moisture').then((success) {
+        if (success) {
+          _setPumpStateLocal(
+            true,
+            triggeredBy: 'auto_moisture',
+            zone: 'Vườn rau A',
+            toggleTime: startTime,
+          );
+        } else {
+          _isAutoPumping = false;
+          _lastAutoPumpTime = null;
+        }
+        notifyListeners();
+      });
+    } else {
+      // Độ ẩm đã phục hồi → tắt bơm nếu đang ở chế độ tự động
+      if (_isAutoPumping && _isPumpOn) {
+        _isAutoPumping = false;
+        _sendPumpToggle(false, triggeredBy: 'auto_moisture');
+        _setPumpStateLocal(false, triggeredBy: 'auto_moisture');
+        notifyListeners();
+      }
+    }
   }
 
   Future<void> _fetchHistory(String type, String period) async {
@@ -638,12 +731,17 @@ class SensorProvider with ChangeNotifier {
       final data = jsonDecode(response.body) as List<dynamic>;
       final points = data
           .whereType<Map<String, dynamic>>()
-          .map(
-            (e) => ChartDataPoint(
-              time: DateTime.tryParse((e['time'] ?? '').toString()) ?? DateTime.now(),
+          .map((e) {
+            final rawTime = (e['time'] ?? '').toString();
+            final parsed = DateTime.tryParse(rawTime);
+            final localTime = parsed != null
+                ? (parsed.isUtc ? parsed.toLocal() : parsed)
+                : DateTime.now();
+            return ChartDataPoint(
+              time: localTime,
               value: (e['value'] as num?)?.toDouble() ?? 0,
-            ),
-          )
+            );
+          })
           .toList();
 
       if (points.isNotEmpty) {
