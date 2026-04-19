@@ -156,14 +156,14 @@ class ProfileScreen extends StatelessWidget {
         ),
         const SizedBox(height: 16),
         Text(
-          'Che Dog',
+          'Tra',
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
             fontWeight: FontWeight.bold,
           ),
         ),
         const SizedBox(height: 4),
         Text(
-          'chedog@example.com',
+          'Tra@example.com',
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
             color: Theme.of(context).textTheme.bodyMedium?.color,
           ),

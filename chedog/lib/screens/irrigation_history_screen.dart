@@ -26,7 +26,7 @@ class IrrigationHistoryScreen extends StatefulWidget {
 }
 
 class _IrrigationHistoryScreenState extends State<IrrigationHistoryScreen> {
-  int _selectedIndex = 3;
+  final int _selectedIndex = 3;
   String _filterBy = 'all'; // 'all', 'manual', 'schedule', 'auto'
 
   void _navigateByIndex(int index) {
@@ -66,6 +66,17 @@ class _IrrigationHistoryScreenState extends State<IrrigationHistoryScreen> {
       appBar: AppBar(
         automaticallyImplyLeading: widget.showBackButton,
         title: const Text('Lịch sử tưới nước'),
+        actions: [
+          Consumer<SensorProvider>(
+            builder: (_, sensor, _) => sensor.irrigationLogs.isNotEmpty
+                ? IconButton(
+                    tooltip: 'Xóa toàn bộ lịch sử',
+                    icon: const Icon(Icons.delete_sweep_outlined),
+                    onPressed: () => _confirmDeleteAll(context, sensor),
+                  )
+                : const SizedBox.shrink(),
+          ),
+        ],
       ),
       body: Consumer<SensorProvider>(
         builder: (context, sensor, _) {
@@ -121,10 +132,10 @@ class _IrrigationHistoryScreenState extends State<IrrigationHistoryScreen> {
                     : ListView.separated(
                         padding: const EdgeInsets.all(AppConstants.paddingMedium),
                         itemCount: logs.length,
-                        separatorBuilder: (_, __) =>
+                        separatorBuilder: (_, _) =>
                             const SizedBox(height: 10),
                         itemBuilder: (context, index) =>
-                            _buildLogCard(context, logs[index]),
+                            _buildDismissibleLogCard(context, sensor, logs[index]),
                       ),
               ),
             ],
@@ -407,10 +418,6 @@ class _IrrigationHistoryScreenState extends State<IrrigationHistoryScreen> {
                       children: [
                         _infoChip(Icons.timer_outlined,
                             log.durationFormatted),
-                        const SizedBox(width: 8),
-                        if (log.flowAmount != null)
-                          _infoChip(Icons.water_drop,
-                              '${log.flowAmount!.toStringAsFixed(0)} L'),
                       ],
                     ),
                   ],
@@ -420,6 +427,72 @@ class _IrrigationHistoryScreenState extends State<IrrigationHistoryScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildDismissibleLogCard(
+    BuildContext context,
+    SensorProvider sensor,
+    IrrigationLog log,
+  ) {
+    final isActive = log.endTime == null;
+    if (isActive) {
+      return _buildLogCard(context, log);
+    }
+
+    return Dismissible(
+      key: ValueKey('irrigation_${log.id}'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: Colors.red.shade400,
+          borderRadius: BorderRadius.circular(AppConstants.radiusLarge),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: const Icon(Icons.delete_outline, color: Colors.white),
+      ),
+      onDismissed: (_) {
+        sensor.deleteIrrigationSession(log.id);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã xóa lịch sử tưới')),
+        );
+      },
+      child: _buildLogCard(context, log),
+    );
+  }
+
+  Future<void> _confirmDeleteAll(BuildContext context, SensorProvider sensor) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xóa toàn bộ lịch sử tưới?'),
+        content: const Text('Tất cả lịch sử tưới sẽ bị xóa khỏi ứng dụng và cơ sở dữ liệu.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Xóa'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    sensor.deleteAllIrrigationSessions();
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Đã xóa toàn bộ lịch sử tưới')),
     );
   }
 

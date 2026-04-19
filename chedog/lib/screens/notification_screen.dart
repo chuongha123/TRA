@@ -1,6 +1,5 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:intl/intl.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_constants.dart';
 import '../providers/sensor_provider.dart';
@@ -43,11 +42,20 @@ class _NotificationScreenState extends State<NotificationScreen>
         ),
         actions: [
           Consumer<SensorProvider>(
-            builder: (_, sensor, __) => sensor.unreadAlertCount > 0
+            builder: (_, sensor, _) => sensor.unreadAlertCount > 0
                 ? TextButton.icon(
                     onPressed: () => sensor.markAllAlertsRead(),
                     icon: const Icon(Icons.done_all, size: 16),
                     label: const Text('Đọc tất cả', style: TextStyle(fontSize: 12)),
+                  )
+                : const SizedBox.shrink(),
+          ),
+          Consumer<SensorProvider>(
+            builder: (_, sensor, _) => sensor.alerts.isNotEmpty
+                ? IconButton(
+                    tooltip: 'Xóa toàn bộ lịch sử',
+                    icon: const Icon(Icons.delete_sweep_outlined),
+                    onPressed: () => _confirmDeleteAll(context, sensor),
                   )
                 : const SizedBox.shrink(),
           ),
@@ -96,17 +104,50 @@ class _NotificationScreenState extends State<NotificationScreen>
             if (unread.isNotEmpty) ...[
               _sectionHeader('Chưa đọc (${unread.length})', AppColors.error),
               const SizedBox(height: 8),
-              ...unread.map((a) => _buildAlertCard(context, sensor, a)),
+              ...unread.map((a) => _buildDismissibleAlertCard(context, sensor, a)),
               const SizedBox(height: 16),
             ],
             if (read.isNotEmpty) ...[
               _sectionHeader('Đã đọc', Colors.grey),
               const SizedBox(height: 8),
-              ...read.map((a) => _buildAlertCard(context, sensor, a)),
+              ...read.map((a) => _buildDismissibleAlertCard(context, sensor, a)),
             ],
           ],
         );
       },
+    );
+  }
+
+  Widget _buildDismissibleAlertCard(
+    BuildContext context,
+    SensorProvider sensor,
+    Map<String, dynamic> alert,
+  ) {
+    final alertId = (alert['id'] ?? '').toString();
+    if (alertId.isEmpty) {
+      return _buildAlertCard(context, sensor, alert);
+    }
+
+    return Dismissible(
+      key: ValueKey('alert_$alertId'),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: BoxDecoration(
+          color: Colors.red.shade400,
+          borderRadius: BorderRadius.circular(AppConstants.radiusLarge),
+        ),
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: const Icon(Icons.delete_outline, color: Colors.white),
+      ),
+      onDismissed: (_) {
+        sensor.deleteAlert(alertId);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã xóa cảnh báo')),
+        );
+      },
+      child: _buildAlertCard(context, sensor, alert),
     );
   }
 
@@ -143,6 +184,10 @@ class _NotificationScreenState extends State<NotificationScreen>
       case 'soil_moisture':
         typeColor = const Color(0xFF1565C0);
         typeIcon = Icons.water_drop;
+        break;
+      case 'weather_rain_warning':
+        typeColor = const Color(0xFF2E7D32);
+        typeIcon = Icons.cloudy_snowing;
         break;
       case 'humidity':
         typeColor = const Color(0xFF00838F);
@@ -249,6 +294,39 @@ class _NotificationScreenState extends State<NotificationScreen>
     if (diff.inMinutes < 60) return '${diff.inMinutes} phút trước';
     if (diff.inHours < 24) return '${diff.inHours} giờ trước';
     return '${diff.inDays} ngày trước';
+  }
+
+  Future<void> _confirmDeleteAll(BuildContext context, SensorProvider sensor) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Xóa toàn bộ lịch sử?'),
+        content: const Text('Tất cả cảnh báo sẽ bị xóa khỏi ứng dụng và cơ sở dữ liệu.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Hủy'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Xóa'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) {
+      return;
+    }
+
+    sensor.deleteAllAlerts();
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Đã xóa toàn bộ lịch sử cảnh báo')),
+    );
   }
 
   // ─────────────── Tab Cài ngưỡng ──────────────────────────────────────────

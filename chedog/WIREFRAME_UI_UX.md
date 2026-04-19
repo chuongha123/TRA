@@ -259,7 +259,7 @@ Màn hình chính hiển thị tổng quan các thiết bị và phòng.
 ```
 ┌─────────────────────────────┐
 │ Good Morning          🔔 ⚙️  │ ← AppBar
-│ Che Dog                    │
+│ Tra                    │
 ├─────────────────────────────┤
 │  ┌─────────────────────┐    │
 │  │ Living Room    ☀️   │    │ ← Environment Card
@@ -302,7 +302,7 @@ Màn hình chính hiển thị tổng quan các thiết bị và phòng.
 - **Height**: 100px
 - **Title**: 
   - Line 1: "Good Morning" - size 14, normal weight
-  - Line 2: "Che Dog" - size 18, bold
+  - Line 2: "Tra" - size 18, bold
 - **Actions**: 
   - Notification icon (badge khi có thông báo mới)
   - Settings icon
@@ -775,8 +775,8 @@ Màn hình thông tin người dùng và cài đặt.
 │      │    JD    │           │ ← Avatar
 │      └──────────┘           │
 │                             │
-│      Che Dog               │ ← Name
-│   chedog@email.com        │ ← Email
+│      Tra               │ ← Name
+│   Tra@email.com        │ ← Email
 │                             │
 │    12        │      8       │ ← Stats
 │  Devices     │  Schedules   │

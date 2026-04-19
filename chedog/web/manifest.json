@@ -1,6 +1,6 @@
 {
-    "name": "chedog",
-    "short_name": "chedog",
+    "name": "AgriFlow",
+    "short_name": "AgriFlow",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -21,7 +21,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Living Room Light'),
+        title: const Text('ESP32 Garden Controller'),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit_outlined),
@@ -98,14 +98,14 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
               ],
             ),
             child: Icon(
-              Icons.lightbulb,
+              Icons.water_drop,
               size: 60,
               color: _isOn ? Colors.white : Colors.grey[600],
             ),
           ),
           const SizedBox(height: 16),
           Text(
-            'Living Room',
+            'ESP32 Garden Sensor',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
               color: Theme.of(context).textTheme.bodyMedium?.color,
             ),
@@ -159,7 +159,7 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
                   _isOn = value;
                 });
               },
-              activeColor: AppColors.primary,
+              activeThumbColor: AppColors.primary,
             ),
           ],
         ),
@@ -289,15 +289,15 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: 16),
-            _buildInfoRow('Device ID', 'ESP32-001'),
+            _buildInfoRow('Device ID', AppConstants.esp32DefaultHost),
             const Divider(),
-            _buildInfoRow('Type', 'Smart Light'),
+            _buildInfoRow('Type', AppConstants.deviceTypeController),
             const Divider(),
-            _buildInfoRow('Location', 'Living Room'),
+            _buildInfoRow('Location', 'Vườn rau A'),
             const Divider(),
-            _buildInfoRow('Last Update', '2 minutes ago'),
+            _buildInfoRow('Last Update', 'Fetching...'),
             const Divider(),
-            _buildInfoRow('Firmware', 'v1.2.3'),
+            _buildInfoRow('Firmware', 'Check device'),
           ],
         ),
       ),

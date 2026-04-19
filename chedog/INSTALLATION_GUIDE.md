@@ -83,7 +83,7 @@ git clone https://github.com/yourusername/smart-home-iot.git
 cd smart-home-iot
 
 # Hoặc nếu có folder local
-cd path/to/chedog
+cd path/to/Tra
 ```
 
 ### 2. Cài Đặt Dependencies

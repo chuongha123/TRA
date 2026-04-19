@@ -23,7 +23,7 @@ class ScheduleScreen extends StatefulWidget {
 }
 
 class _ScheduleScreenState extends State<ScheduleScreen> {
-  int _selectedIndex = 2;
+  final int _selectedIndex = 2;
 
   void _navigateByIndex(int index) {
     if (index == _selectedIndex) return;
@@ -95,7 +95,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
           return ListView.separated(
             padding: const EdgeInsets.all(AppConstants.paddingMedium),
             itemCount: provider.schedules.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            separatorBuilder: (_, _) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final schedule = provider.schedules[index];
               return _buildAlarmCard(context, provider, schedule);
@@ -286,10 +286,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
     List<bool> selectedDays =
         existing?.days != null ? List.from(existing!.days) : List.filled(7, true);
     int duration = existing?.durationMinutes ?? 15;
-    String zone = existing?.zone ?? 'Vườn rau A';
+    String zone = existing?.zone ?? AppConstants.availableZones.first;
 
     const dayLabels = ['T2', 'T3', 'T4', 'T5', 'T6', 'T7', 'CN'];
-    const zones = ['Vườn rau A', 'Vườn hoa B', 'Nhà kính C', 'Vườn cây ăn quả'];
+    final zones = AppConstants.availableZones;
 
     showModalBottomSheet(
       context: context,
@@ -431,7 +431,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> {
 
                 // --- Khu vực ---
                 DropdownButtonFormField<String>(
-                  value: zone,
+                  initialValue: zone,
                   decoration: const InputDecoration(
                     labelText: 'Khu vực',
                     prefixIcon: Icon(Icons.grass),

@@ -1,15 +1,38 @@
 /// App Constants - Các hằng số của ứng dụng
+/// 
+/// Environment Variables Support:
+/// Để sử dụng biến môi trường, compile với:
+/// flutter run --dart-define=API_BASE_URL="http://YOUR_SERVER:3000/api"
+/// flutter run --dart-define=WEBSOCKET_URL="ws://YOUR_SERVER:3000"
+/// flutter run --dart-define=ESP32_HOST="192.168.1.100"
+///
 class AppConstants {
   // App Info
-  static const String appName = 'Smart Agriculture IoT';
+  static const String appName = 'AgriFlow';
   static const String appVersion = '1.0.0';
   
-  // API Configuration
-  static const String apiBaseUrl = 'https://api.smartfarm.com';
-  static const String websocketUrl = 'wss://ws.smartfarm.com';
+  // API Configuration with environment variable support
+  // Default: Android emulator, change for real device/server
+  static const String apiBaseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://10.0.2.2:3000/api',
+  );
+  static const String websocketUrl = String.fromEnvironment(
+    'WEBSOCKET_URL',
+    defaultValue: 'ws://10.0.2.2:3000',
+  );
+  static const String openMeteoBaseUrl = 'https://api.open-meteo.com/v1/forecast';
+
+  // Weather defaults (TP.HCM)
+  static const double weatherLatitude = 10.8231;
+  static const double weatherLongitude = 106.6297;
+  static const String weatherLocationName = 'TP. Ho Chi Minh';
   
-  // ESP32 Configuration
-  static const String esp32DefaultHost = '192.168.1.100';
+  // ESP32 Configuration with environment variable support
+  static const String esp32DefaultHost = String.fromEnvironment(
+    'ESP32_HOST',
+    defaultValue: '192.168.1.100',
+  );
   static const int esp32DefaultPort = 80;
   
   // Storage Keys
@@ -18,6 +41,10 @@ class AppConstants {
   static const String keyUserId = 'user_id';
   static const String keyUsername = 'username';
   static const String keyDevices = 'devices';
+  static const String keyWeatherLastCheckDate = 'weather_last_check_date';
+
+  // Daily auto weather check
+  static const int dailyWeatherCheckHour = 6;
   
   // Device Types - Thiết bị nông nghiệp
   static const String deviceTypePump = 'pump';              // Máy bơm nước
@@ -26,6 +53,14 @@ class AppConstants {
   static const String deviceTypeTempHumid = 'temp_humid';   // Cảm biến nhiệt độ/độ ẩm
   static const String deviceTypeLightSensor = 'light_sensor'; // Cảm biến ánh sáng
   static const String deviceTypeController = 'controller';   // Bộ điều khiển ESP32
+  
+  // Zones - Các khu vực canh tác
+  static const List<String> availableZones = [
+    'Vườn rau A',
+    'Vườn hoa B',
+    'Nhà kính C',
+    'Vườn cây ăn quả',
+  ];
   
   // Sensor Types
   static const String sensorTypeSoilMoisture = 'soil_moisture';     // Độ ẩm đất

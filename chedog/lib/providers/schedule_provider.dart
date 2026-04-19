@@ -1,5 +1,7 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'sensor_provider.dart';
 
 /// Schedule Item - Lịch tưới nước
 class IrrigationSchedule {
@@ -30,7 +32,9 @@ class IrrigationSchedule {
     if (active.length == 7) return 'Hàng ngày';
     if (active.length == 5 &&
         !days[5] &&
-        !days[6]) return 'Ngày trong tuần';
+        !days[6]) {
+      return 'Ngày trong tuần';
+    }
     if (active.length == 2 && days[5] && days[6]) return 'Cuối tuần';
     return active.join(', ');
   }
@@ -63,43 +67,59 @@ class IrrigationSchedule {
 
 /// Schedule Provider - Quản lý lịch tưới
 class ScheduleProvider with ChangeNotifier {
+  SensorProvider _sensorProvider;
   final List<IrrigationSchedule> _schedules = [];
   List<IrrigationSchedule> get schedules => List.unmodifiable(_schedules);
+  Timer? _scheduleTimer;
+  final Map<String, String> _lastTriggerMinuteBySchedule = {};
 
-  ScheduleProvider() {
-    _loadMockSchedules();
+  ScheduleProvider(this._sensorProvider) {
+    _startScheduleEngine();
   }
 
-  void _loadMockSchedules() {
-    _schedules.addAll([
-      IrrigationSchedule(
-        id: 's1',
-        name: 'Tưới buổi sáng',
-        time: const TimeOfDay(hour: 6, minute: 0),
-        days: [true, true, true, true, true, true, true],
-        durationMinutes: 15,
-        zone: 'Vườn rau A',
-        isEnabled: true,
-      ),
-      IrrigationSchedule(
-        id: 's2',
-        name: 'Tưới chiều',
-        time: const TimeOfDay(hour: 17, minute: 30),
-        days: [true, true, true, true, true, false, false],
-        durationMinutes: 10,
-        zone: 'Vườn hoa B',
-        isEnabled: true,
-      ),
-      IrrigationSchedule(
-        id: 's3',
-        name: 'Tưới nhà kính',
-        time: const TimeOfDay(hour: 8, minute: 0),
-        days: [false, false, false, false, false, true, true],
-        durationMinutes: 20,
-        zone: 'Nhà kính C',
-        isEnabled: false,
-      ),
-    ]);
+  void updateSensorProvider(SensorProvider sensorProvider) {
+    _sensorProvider = sensorProvider;
+  }
+
+  void _startScheduleEngine() {
+    _scheduleTimer?.cancel();
+    _scheduleTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      _checkAndRunSchedules();
+    });
+
+    // Chay ngay khi khoi tao de khong bo lo neu app mo dung phut lich.
+    _checkAndRunSchedules();
+  }
+
+  void _checkAndRunSchedules() {
+    final now = DateTime.now();
+    final weekdayIndex = (now.weekday + 6) % 7; // Monday=0 ... Sunday=6
+    final minuteKey =
+        '${now.year}-${now.month}-${now.day}-${now.hour}-${now.minute}';
+
+    for (final schedule in _schedules) {
+      if (!schedule.isEnabled) continue;
+      if (!schedule.days[weekdayIndex]) continue;
+      if (schedule.time.hour != now.hour || schedule.time.minute != now.minute) {
+        continue;
+      }
+
+      final triggerKey = _lastTriggerMinuteBySchedule[schedule.id];
+      if (triggerKey == minuteKey) {
+        continue;
+      }
+
+      _lastTriggerMinuteBySchedule[schedule.id] = minuteKey;
+      _sensorProvider.runScheduledIrrigation(
+        durationMinutes: schedule.durationMinutes,
+        scheduleName: schedule.name,
+        zone: schedule.zone,
+      );
+    }
+  }
+
+  void onAppResumed() {
+    _checkAndRunSchedules();
   }
 
   void addSchedule(IrrigationSchedule schedule) {
@@ -130,4 +150,10 @@ class ScheduleProvider with ChangeNotifier {
 
   String generateId() =>
       DateTime.now().millisecondsSinceEpoch.toString();
+
+  @override
+  void dispose() {
+    _scheduleTimer?.cancel();
+    super.dispose();
+  }
 }

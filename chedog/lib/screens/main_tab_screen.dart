@@ -3,6 +3,7 @@ import 'home_dashboard.dart';
 import 'sensor_history_screen.dart';
 import 'schedule_screen.dart';
 import 'irrigation_history_screen.dart';
+import 'weather_screen.dart';
 
 /// Main tab shell with persistent bottom navigation.
 class MainTabScreen extends StatefulWidget {
@@ -20,6 +21,7 @@ class _MainTabScreenState extends State<MainTabScreen> {
     SensorHistoryScreen(showBackButton: false, showBottomNav: false),
     ScheduleScreen(showBackButton: false, showBottomNav: false),
     IrrigationHistoryScreen(showBackButton: false, showBottomNav: false),
+    WeatherScreen(),
   ];
 
   @override
@@ -55,6 +57,11 @@ class _MainTabScreenState extends State<MainTabScreen> {
             icon: Icon(Icons.water_drop_outlined),
             activeIcon: Icon(Icons.water_drop),
             label: 'Lịch sử tưới',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.cloud_outlined),
+            activeIcon: Icon(Icons.cloud),
+            label: 'Thời tiết',
           ),
         ],
       ),
