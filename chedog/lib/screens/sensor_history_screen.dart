@@ -30,7 +30,7 @@ class SensorHistoryScreen extends StatefulWidget {
 class _SensorHistoryScreenState extends State<SensorHistoryScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  int _selectedIndex = 1;
+  final int _selectedIndex = 1;
   String _selectedPeriod = '24h';
 
   static const _sensorTypes = [

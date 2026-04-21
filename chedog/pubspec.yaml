@@ -56,9 +56,6 @@ dependencies:
   # Notifications
   flutter_local_notifications: ^17.1.2
 
-  # Background scheduling (Android)
-  workmanager: ^0.6.0
-
 dev_dependencies:
   flutter_test:
     sdk: flutter

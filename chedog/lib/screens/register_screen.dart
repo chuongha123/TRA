@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../constants/app_colors.dart';
 import '../constants/app_constants.dart';
 
 /// Register Screen - Màn hình đăng ký
