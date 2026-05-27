@@ -185,6 +185,10 @@ class _NotificationScreenState extends State<NotificationScreen>
         typeColor = const Color(0xFF1565C0);
         typeIcon = Icons.water_drop;
         break;
+      case 'soil_moisture_high':
+        typeColor = const Color(0xFF1565C0);
+        typeIcon = Icons.water_drop;
+        break;
       case 'weather_rain_warning':
         typeColor = const Color(0xFF2E7D32);
         typeIcon = Icons.cloudy_snowing;
@@ -362,20 +366,7 @@ class _NotificationScreenState extends State<NotificationScreen>
               ),
             ),
             const SizedBox(height: 12),
-            _buildThresholdCard(
-              context: context,
-              sensor: sensor,
-              type: 'soil_moisture',
-              label: 'Độ ẩm đất',
-              icon: Icons.water_drop,
-              color: const Color(0xFF1565C0),
-              unit: '%',
-              alertType: 'below',
-              min: 10,
-              max: 60,
-              divisions: 50,
-              description: 'Cảnh báo khi độ ẩm đất thấp hơn ngưỡng',
-            ),
+            _buildSoilMoistureThresholdCard(context: context, sensor: sensor),
             const SizedBox(height: 12),
             _buildThresholdCard(
               context: context,
@@ -428,6 +419,145 @@ class _NotificationScreenState extends State<NotificationScreen>
     );
   }
 
+  Widget _buildSoilMoistureThresholdCard({
+    required BuildContext context,
+    required SensorProvider sensor,
+  }) {
+    const color = Color(0xFF1565C0);
+    final low = (sensor.thresholds['soil_moisture'] ?? 30.0).clamp(10.0, 100.0);
+    final high = (sensor.thresholds['soil_moisture_high'] ?? 80.0).clamp(10.0, 100.0);
+    final current = sensor.currentReadings['soil_moisture'] ?? 0.0;
+    final isAlertingLow = current < low;
+    final isAlertingHigh = current > high;
+    final isAlerting = isAlertingLow || isAlertingHigh;
+
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(AppConstants.radiusLarge),
+        side: isAlerting
+            ? BorderSide(color: AppColors.error.withOpacity(0.4), width: 1.5)
+            : BorderSide.none,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.water_drop, color: color, size: 18),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Độ ẩm đất',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      Text('Cảnh báo khi độ ẩm đất ra ngoài khoảng cho phép',
+                          style: TextStyle(fontSize: 11, color: Colors.grey)),
+                    ],
+                  ),
+                ),
+                if (isAlerting)
+                  const Icon(Icons.warning_amber_rounded,
+                      color: AppColors.error, size: 20),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // Threshold labels row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                _thresholdBadge(
+                  label: 'Thấp',
+                  value: '${low.toStringAsFixed(1)} %',
+                  color: isAlertingLow ? AppColors.error : color,
+                ),
+                Text(
+                  'Hiện tại: ${current.toStringAsFixed(1)} %',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: isAlerting ? AppColors.error : Colors.grey.shade600,
+                  ),
+                ),
+                _thresholdBadge(
+                  label: 'Cao',
+                  value: '${high.toStringAsFixed(1)} %',
+                  color: isAlertingHigh ? AppColors.error : color,
+                ),
+              ],
+            ),
+
+            // Single RangeSlider
+            RangeSlider(
+              values: RangeValues(low, high),
+              min: 10,
+              max: 100,
+              divisions: 90,
+              activeColor: isAlerting ? AppColors.error : color,
+              inactiveColor: color.withOpacity(0.2),
+              labels: RangeLabels(
+                '${low.toStringAsFixed(0)} %',
+                '${high.toStringAsFixed(0)} %',
+              ),
+              onChanged: (v) {
+                sensor.updateThreshold('soil_moisture', v.start);
+                sensor.updateThreshold('soil_moisture_high', v.end);
+              },
+            ),
+
+            // Min/Max labels
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('10 %',
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                Text('100 %',
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _thresholdBadge({
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Text(label,
+            style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+        const SizedBox(height: 2),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Text(value,
+              style: TextStyle(
+                  color: color, fontWeight: FontWeight.bold, fontSize: 13)),
+        ),
+      ],
+    );
+  }
+
   Widget _buildThresholdCard({
     required BuildContext context,
     required SensorProvider sensor,
@@ -441,9 +571,10 @@ class _NotificationScreenState extends State<NotificationScreen>
     required double max,
     required int divisions,
     required String description,
+    String? sensorKey, // override sensor reading key (defaults to type)
   }) {
     final current = sensor.thresholds[type] ?? (alertType == 'below' ? 30.0 : 38.0);
-    final currentSensorValue = sensor.currentReadings[type] ?? 0;
+    final currentSensorValue = sensor.currentReadings[sensorKey ?? type] ?? 0;
     final isAlerting = alertType == 'below'
         ? currentSensorValue < current
         : currentSensorValue > current;

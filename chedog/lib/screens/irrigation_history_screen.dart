@@ -27,7 +27,7 @@ class IrrigationHistoryScreen extends StatefulWidget {
 
 class _IrrigationHistoryScreenState extends State<IrrigationHistoryScreen> {
   final int _selectedIndex = 3;
-  String _filterBy = 'all'; // 'all', 'manual', 'schedule', 'auto'
+  String _filterBy = 'all'; // 'all', 'manual', 'schedule', 'auto', 'drain'
 
   void _navigateByIndex(int index) {
     if (index == _selectedIndex) return;
@@ -81,7 +81,11 @@ class _IrrigationHistoryScreenState extends State<IrrigationHistoryScreen> {
       body: Consumer<SensorProvider>(
         builder: (context, sensor, _) {
           final logs = sensor.irrigationLogs
-              .where((l) => _filterBy == 'all' || l.triggeredBy == _filterBy)
+              .where((l) {
+                if (_filterBy == 'all') return true;
+                if (_filterBy == 'drain') return l.pumpType == 'drain';
+                return l.pumpType != 'drain' && l.triggeredBy == _filterBy;
+              })
               .toList();
 
           // Tổng hợp thống kê
@@ -252,6 +256,7 @@ class _IrrigationHistoryScreenState extends State<IrrigationHistoryScreen> {
       'manual': 'Thủ công',
       'schedule': 'Lịch trình',
       'auto': 'Tự động',
+      'drain': 'Thoát nước',
     };
     return SizedBox(
       height: 40,
@@ -283,6 +288,114 @@ class _IrrigationHistoryScreenState extends State<IrrigationHistoryScreen> {
     final isActive = log.endTime == null;
     Color triggerColor;
     IconData triggerIcon;
+
+    // Bơm thoát
+    if (log.pumpType == 'drain') {
+      return Card(
+        elevation: isActive ? 4 : 1,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppConstants.radiusLarge),
+          side: isActive
+              ? const BorderSide(color: Color(0xFF00838F), width: 1.5)
+              : BorderSide.none,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: isActive
+                      ? const Color(0xFF00838F)
+                      : const Color(0xFF00838F).withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isActive ? Icons.water : Icons.water_outlined,
+                  color: isActive ? Colors.white : const Color(0xFF00838F),
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            log.deviceName,
+                            style: Theme.of(context)
+                                .textTheme
+                                .titleMedium
+                                ?.copyWith(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        if (isActive)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00838F),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.circle, color: Colors.white, size: 6),
+                                SizedBox(width: 4),
+                                Text('Đang thoát',
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Icon(Icons.grass, size: 13, color: Colors.grey.shade500),
+                        const SizedBox(width: 4),
+                        Text(log.zone,
+                            style: TextStyle(
+                                fontSize: 12, color: Colors.grey.shade600)),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _infoChip(
+                            Icons.play_circle_outline,
+                            'Bắt đầu: ${DateFormat('HH:mm dd/MM').format(log.startTime)}',
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (log.endTime != null) ...[  
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          _infoChip(Icons.timer_outlined, log.durationFormatted),
+                        ],
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
     switch (log.triggeredBy) {
       case 'manual':
         triggerColor = AppColors.info;

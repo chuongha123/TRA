@@ -135,6 +135,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
               _buildEnvironmentCard(sensor),
               const SizedBox(height: 16),
               _buildPumpButton(sensor),
+              const SizedBox(height: 12),
+              _buildDrainPumpButton(sensor),
               const SizedBox(height: 16),
               _buildChartsSection(sensor),
             ],
@@ -275,6 +277,151 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   ),
                   GestureDetector(
                     onTap: () => sensor.clearPumpError(),
+                    child: Icon(Icons.close, color: Colors.red.shade700, size: 18),
+                  ),
+                ],
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildDrainPumpButton(SensorProvider sensor) {
+    final isOn = sensor.isDrainPumpOn;
+    final isToggling = sensor.isTogglingDrain;
+    final error = sensor.drainPumpErrorMessage;
+    final isActiveVisualState = isOn || isToggling;
+    final foregroundColor = isActiveVisualState ? Colors.white : Colors.grey.shade900;
+    final secondaryColor = isActiveVisualState ? Colors.white70 : Colors.grey.shade700;
+    final iconBadgeColor = isActiveVisualState
+        ? Colors.white.withValues(alpha: 0.25)
+        : Colors.white.withValues(alpha: 0.8);
+
+    const drainColor = Color(0xFF00838F);
+    const drainGradient = LinearGradient(
+      colors: [Color(0xFF00838F), Color(0xFF006064)],
+      begin: Alignment.topLeft,
+      end: Alignment.bottomRight,
+    );
+
+    return Column(
+      children: [
+        GestureDetector(
+          onTap: isToggling ? null : () => sensor.toggleDrainPump(),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 300),
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+            decoration: BoxDecoration(
+              gradient: isToggling
+                  ? LinearGradient(
+                      colors: [Colors.grey.shade400, Colors.grey.shade500],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : (isOn
+                      ? drainGradient
+                      : LinearGradient(
+                          colors: [Colors.grey.shade300, Colors.grey.shade400],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        )),
+              borderRadius: BorderRadius.circular(AppConstants.radiusLarge),
+              boxShadow: [
+                BoxShadow(
+                  color: (isOn ? drainColor : Colors.grey).withOpacity(0.35),
+                  blurRadius: 12,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 300),
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: iconBadgeColor,
+                    shape: BoxShape.circle,
+                  ),
+                  child: isToggling
+                      ? SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation(foregroundColor),
+                          ),
+                        )
+                      : Icon(
+                          isOn ? Icons.water : Icons.water_outlined,
+                          color: foregroundColor,
+                          size: 30,
+                        ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        isToggling
+                            ? 'Đang xử lý...'
+                            : (isOn ? 'Bơm thoát đang chạy' : 'Bơm thoát đang tắt'),
+                        style: TextStyle(
+                          color: foregroundColor,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        isToggling
+                            ? 'Vui lòng chờ...'
+                            : (isOn ? 'Nhấn để TẮT bơm thoát' : 'Nhấn để BẬT bơm thoát'),
+                        style: TextStyle(color: secondaryColor, fontSize: 12),
+                      ),
+                    ],
+                  ),
+                ),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 300),
+                  child: Icon(
+                    isToggling
+                        ? Icons.hourglass_empty
+                        : (isOn ? Icons.toggle_on_rounded : Icons.toggle_off_rounded),
+                    key: ValueKey('drain_${isToggling}_$isOn'),
+                    color: foregroundColor,
+                    size: 36,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (error != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                border: Border.all(color: Colors.red.shade300),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red.shade700, size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      error,
+                      style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () => sensor.clearDrainPumpError(),
                     child: Icon(Icons.close, color: Colors.red.shade700, size: 18),
                   ),
                 ],

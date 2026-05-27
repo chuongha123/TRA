@@ -27,7 +27,7 @@ class SensorProvider with ChangeNotifier {
   final LocationService _locationService = LocationService();
   final NotificationService _notificationService = NotificationService();
 
-  // ─── Trạng thái bơm ───────────────────────────────────────────────────────
+  // ─── Trạng thái bơm tưới (pin 27) ─────────────────────────────────────────
   bool _isPumpOn = false;
   bool _isTogglingPump = false;
   String? _pumpErrorMessage;
@@ -38,6 +38,20 @@ class SensorProvider with ChangeNotifier {
   
   void clearPumpError() {
     _pumpErrorMessage = null;
+    notifyListeners();
+  }
+
+  // ─── Trạng thái bơm thoát (pin 26) ──────────────────────────────────────────
+  bool _isDrainPumpOn = false;
+  bool _isTogglingDrainPump = false;
+  String? _drainPumpErrorMessage;
+
+  bool get isDrainPumpOn => _isDrainPumpOn;
+  bool get isTogglingDrain => _isTogglingDrainPump;
+  String? get drainPumpErrorMessage => _drainPumpErrorMessage;
+
+  void clearDrainPumpError() {
+    _drainPumpErrorMessage = null;
     notifyListeners();
   }
 
@@ -59,10 +73,11 @@ class SensorProvider with ChangeNotifier {
 
   // ─── Ngưỡng cảnh báo ──────────────────────────────────────────────────────
   final Map<String, double> _thresholds = {
-    'soil_moisture': 30.0, // % - dưới ngưỡng => cảnh báo
-    'humidity': 40.0, // % - dưới ngưỡng => cảnh báo
-    'temperature': 38.0, // °C - trên ngưỡng => cảnh báo
-    'pressure': 1000.0, // hPa - dưới ngưỡng => cảnh báo
+    'soil_moisture': 30.0,      // % - dưới ngưỡng => cảnh báo
+    'soil_moisture_high': 80.0, // % - trên ngưỡng => cảnh báo
+    'humidity': 40.0,           // % - dưới ngưỡng => cảnh báo
+    'temperature': 38.0,        // °C - trên ngưỡng => cảnh báo
+    'pressure': 1000.0,         // hPa - dưới ngưỡng => cảnh báo
   };
 
   Map<String, double> get thresholds => Map.unmodifiable(_thresholds);
@@ -113,7 +128,7 @@ class SensorProvider with ChangeNotifier {
     super.dispose();
   }
 
-  // ─── Bật/tắt bơm ─────────────────────────────────────────────────────────
+  // ─── Bật/tắt bơm tưới ────────────────────────────────────────────────────
   Future<void> togglePump() async {
     // Ngăn chặn toggle lặp lại nhanh
     if (_isTogglingPump) return;
@@ -145,6 +160,27 @@ class SensorProvider with ChangeNotifier {
     }
     
     _isTogglingPump = false;
+    notifyListeners();
+  }
+
+  // ─── Bật/tắt bơm thoát ────────────────────────────────────────────────────
+  Future<void> toggleDrainPump() async {
+    if (_isTogglingDrainPump) return;
+
+    final nextState = !_isDrainPumpOn;
+    _isTogglingDrainPump = true;
+    _drainPumpErrorMessage = null;
+    notifyListeners();
+
+    final success = await _sendDrainPumpToggle(nextState);
+
+    if (success) {
+      _setDrainPumpStateLocal(nextState, toggleTime: DateTime.now());
+    } else {
+      _drainPumpErrorMessage = 'Không thể điều khiển bơm thoát. Kiểm tra kết nối server';
+    }
+
+    _isTogglingDrainPump = false;
     notifyListeners();
   }
 
@@ -611,7 +647,42 @@ class SensorProvider with ChangeNotifier {
       isTriggered: (value, threshold) => value < threshold,
     );
 
+    _checkSoilMoistureHigh();
+
     _checkAutoIrrigation();
+  }
+
+  void _checkSoilMoistureHigh() {
+    final value = _currentReadings['soil_moisture'];
+    final threshold = _thresholds['soil_moisture_high'];
+    if (value == null || threshold == null) return;
+
+    const key = 'threshold_soil_moisture_high';
+    if (value > threshold) {
+      if (_activeThresholdAlerts.contains(key)) return;
+      final alert = {
+        'id': '${key}_${DateTime.now().millisecondsSinceEpoch}',
+        'type': 'soil_moisture_high',
+        'title': 'Độ ẩm đất cao',
+        'message':
+            'Độ ẩm đất đang ở mức ${value.toStringAsFixed(1)}% - vượt ngưỡng ${threshold.toStringAsFixed(1)}%',
+        'zone': 'Vườn rau A',
+        'value': value,
+        'threshold': threshold,
+        'sourceKey': key,
+        'timestamp': DateTime.now(),
+        'isRead': false,
+      };
+      _alerts.insert(0, alert);
+      unawaited(_createAlertOnServer(alert));
+      unawaited(_notificationService.showNotification(
+        title: alert['title'] as String,
+        body: alert['message'] as String,
+      ));
+      _activeThresholdAlerts.add(key);
+    } else {
+      _activeThresholdAlerts.remove(key);
+    }
   }
 
   void _checkThreshold({
@@ -753,6 +824,70 @@ class SensorProvider with ChangeNotifier {
       // Không throw để tránh ảnh hưởng UI hiện tại.
     } finally {
       _historyFetchingKeys.remove(key);
+    }
+  }
+
+  Future<bool> _sendDrainPumpToggle(bool isOn) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/pump/toggle'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'deviceId': 'pump_drain_01',
+              'isOn': isOn,
+              'triggeredBy': 'manual',
+            }),
+          )
+          .timeout(const Duration(seconds: 5));
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  void _setDrainPumpStateLocal(bool isOn, {DateTime? toggleTime}) {
+    final stateChanged = _isDrainPumpOn != isOn;
+    _isDrainPumpOn = isOn;
+    if (!stateChanged) return;
+
+    final effectiveTime = toggleTime ?? DateTime.now();
+
+    if (_isDrainPumpOn) {
+      _irrigationLogs.insert(
+        0,
+        IrrigationLog(
+          id: 'drain_${effectiveTime.millisecondsSinceEpoch}',
+          deviceId: 'pump_drain_01',
+          deviceName: 'Bơm thoát',
+          startTime: effectiveTime,
+          triggeredBy: 'manual',
+          zone: 'Vườn rau A',
+          pumpType: 'drain',
+        ),
+      );
+    } else {
+      final idx = _irrigationLogs.indexWhere(
+        (l) => l.deviceId == 'pump_drain_01' && l.endTime == null,
+      );
+      if (idx != -1) {
+        final log = _irrigationLogs[idx];
+        final end = effectiveTime;
+        final secs = end.difference(log.startTime).inSeconds;
+        final mins = secs ~/ 60;
+        _irrigationLogs[idx] = IrrigationLog(
+          id: log.id,
+          deviceId: log.deviceId,
+          deviceName: log.deviceName,
+          startTime: log.startTime,
+          endTime: end,
+          flowAmount: mins * 12.0,
+          triggeredBy: log.triggeredBy,
+          zone: log.zone,
+          pumpType: 'drain',
+        );
+        _uploadIrrigationSession(_irrigationLogs[idx]);
+      }
     }
   }
 
@@ -928,15 +1063,17 @@ class SensorProvider with ChangeNotifier {
       final fetched = data.whereType<Map<String, dynamic>>().map((e) {
         final durSecs = (e['durationSeconds'] as num?)?.toInt() ?? 0;
         final durMins = durSecs ~/ 60;
+        final pumpType = (e['pumpType'] as String?) ?? 'irrigation';
         return IrrigationLog(
           id: e['id'] as String,
           deviceId: e['deviceId'] as String,
-          deviceName: 'Máy bơm 1',
+          deviceName: pumpType == 'drain' ? 'Bơm thoát' : 'Máy bơm 1',
           startTime: DateTime.tryParse((e['startTime'] ?? '').toString()) ?? DateTime.now(),
           endTime: DateTime.tryParse((e['endTime'] ?? '').toString()),
           flowAmount: durMins * 12.0,
           triggeredBy: e['triggeredBy'] as String? ?? 'auto',
           zone: 'Vườn rau A',
+          pumpType: pumpType,
         );
       }).toList();
 

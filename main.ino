@@ -1,7 +1,8 @@
 // DHT11 GPIO 17
 // BMP280 I2C (GPIO 21 GPIO 22)
 // ĐỘ ẨM ĐẤT GPIO 32
-// RELAY GPIO 5
+// RELAY TƯỚI (IN)  GPIO 27
+// RELAY THOÁT (OUT) GPIO 26
 // NGUỒN CHO MOTOR 12V
 // DỮ LIỆU GỬI VỀ LOCAL API: /api/sensors/ingest
 #include <Wire.h>
@@ -14,30 +15,22 @@
 #define DHT_PIN      17
 #define DHT_TYPE     DHT11
 #define SOIL_PIN     32
-#define RELAY_PIN    5
+#define RELAY_IN     27   // Bơm tưới
+#define RELAY_OUT    26   // Bơm thoát
 
 #define I2C_SDA      21
 #define I2C_SCL      22
 
-// ===== Configuration - Cấu hình thiết bị =====
-// TODO: Thay đổi các giá trị này phù hợp với môi trường của bạn
-// Hoặc sử dụng biến môi trường (environment variables) khi compile
-// Ví dụ: platformio.ini hoặc cmake build configuration
+const char* WIFI_SSID = "YOUR_WIFI_SSID";
+const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";
 
-// WiFi Configuration - Thay đổi với SSID và mật khẩu thực tế
-const char* WIFI_SSID = "YOUR_WIFI_SSID";        // ← THAY ĐỔI TẠI ĐÂY
-const char* WIFI_PASS = "YOUR_WIFI_PASSWORD";    // ← THAY ĐỔI TẠI ĐÂY
+const char* API_HOST = "192.168.1.100";
+const int API_PORT = 3000;
 
-// API Server Configuration - Thay bằng IP của máy chạy Node.js server
-const char* API_HOST = "192.168.1.100";      // ← THAY ĐỔI TẠI ĐÂY (IP server)
-const int API_PORT = 3000;                   // ← Sửa nếu server dùng cổng khác
+const char* DEVICE_ID = "esp32_garden_01";
+const char* API_TOKEN = "esp32-secret";
 
-// Device Identity - Định danh thiết bị
-const char* DEVICE_ID = "esp32_garden_01";   // ← Có thể thay đổi thiết bị khác
-const char* API_TOKEN = "esp32-secret";      // ← THAY ĐỔI TẠI ĐÂY (bảo mật)
-
-// Timezone Configuration
-const long GMT_OFFSET_SECONDS = 7 * 3600;    // GMT+7 cho Việt Nam
+const long GMT_OFFSET_SECONDS = 7 * 3600;
 const int DAYLIGHT_OFFSET_SECONDS = 0;
 const char* NTP_SERVER_1 = "pool.ntp.org";
 const char* NTP_SERVER_2 = "time.nist.gov";
@@ -55,8 +48,12 @@ bool bmpFound = false;
 bool pumpOn = false;
 unsigned long pumpStartedAt = 0;
 const unsigned long pumpDurationMs = 5000;
-String pumpTrigger = "auto"; // "auto" = cam bien, "manual" = lenh app
+String pumpTrigger = "auto";
 String lastPumpCommandTimestamp = "";
+
+bool drainOn = false;
+unsigned long drainStartedAt = 0;
+String lastDrainCommandTimestamp = "";
 
 unsigned long lastSensorReadAt = 0;
 const unsigned long sensorReadIntervalMs = 2000;
@@ -181,7 +178,7 @@ void readSensors() {
   Serial.println(" %");
 }
 
-void postPumpSession(unsigned long durationSeconds, const String& triggeredBy) {
+void postPumpSession(unsigned long durationSeconds, const String& triggeredBy, const String& deviceId) {
   if (WiFi.status() != WL_CONNECTED) return;
 
   String url = "http://" + String(API_HOST) + ":" + String(API_PORT) + "/api/pump/session";
@@ -195,7 +192,7 @@ void postPumpSession(unsigned long durationSeconds, const String& triggeredBy) {
   time_t startEpoch = endEpoch > 0 ? endEpoch - durationSeconds : 0;
 
   String payload = "{";
-  payload += "\"deviceId\":\"" + String(DEVICE_ID) + "\",";
+  payload += "\"deviceId\":\"" + deviceId + "\",";
   payload += "\"durationSeconds\":" + String(durationSeconds) + ",";
   payload += "\"triggeredBy\":\"" + triggeredBy + "\"";
   if (startEpoch > 0) {
@@ -218,41 +215,68 @@ void postPumpSession(unsigned long durationSeconds, const String& triggeredBy) {
 void pollPumpCommand() {
   if (WiFi.status() != WL_CONNECTED) return;
 
-  String url = "http://" + String(API_HOST) + ":" + String(API_PORT) +
-               "/api/pump/latest?deviceId=" + String(DEVICE_ID);
-
-  HTTPClient http;
-  http.begin(url);
-  http.addHeader("X-ESP32-Token", API_TOKEN);
-
-  int code = http.GET();
-  if (code == 200) {
-    String body = http.getString();
-    String commandTimestamp = extractJsonStringValue(body, "timestamp");
-    if (commandTimestamp.length() == 0 || commandTimestamp == lastPumpCommandTimestamp) {
-      http.end();
-      return;
+  // ── Bơm tưới (RELAY_IN / pump_01) ──────────────────────────────────────
+  {
+    String url = "http://" + String(API_HOST) + ":" + String(API_PORT) +
+                 "/api/pump/latest?deviceId=" + String(DEVICE_ID);
+    HTTPClient http;
+    http.begin(url);
+    http.addHeader("X-ESP32-Token", API_TOKEN);
+    int code = http.GET();
+    if (code == 200) {
+      String body = http.getString();
+      String commandTimestamp = extractJsonStringValue(body, "timestamp");
+      if (commandTimestamp.length() > 0 && commandTimestamp != lastPumpCommandTimestamp) {
+        lastPumpCommandTimestamp = commandTimestamp;
+        bool commanded = body.indexOf("\"isOn\":true") >= 0;
+        if (commanded && !pumpOn) {
+          Serial.println("Lenh tu app: Bat bom tuoi");
+          digitalWrite(RELAY_IN, HIGH);
+          pumpOn = true;
+          pumpStartedAt = millis();
+          pumpTrigger = "manual";
+        } else if (!commanded && pumpOn) {
+          Serial.println("Lenh tu app: Tat bom tuoi");
+          digitalWrite(RELAY_IN, LOW);
+          pumpOn = false;
+          unsigned long dur = (millis() - pumpStartedAt) / 1000;
+          postPumpSession(dur, pumpTrigger, String(DEVICE_ID));
+        }
+      }
     }
-
-    lastPumpCommandTimestamp = commandTimestamp;
-
-    // Tìm "isOn":true hoặc "isOn":false trong JSON
-    bool commanded = body.indexOf("\"isOn\":true") >= 0;
-    if (commanded && !pumpOn) {
-      Serial.println("Lenh tu app: Bat bom");
-      digitalWrite(RELAY_PIN, HIGH);
-      pumpOn = true;
-      pumpStartedAt = millis();
-      pumpTrigger = "manual";
-    } else if (!commanded && pumpOn) {
-      Serial.println("Lenh tu app: Tat bom");
-      digitalWrite(RELAY_PIN, LOW);
-      pumpOn = false;
-      unsigned long dur = (millis() - pumpStartedAt) / 1000;
-      postPumpSession(dur, pumpTrigger);
-    }
+    http.end();
   }
-  http.end();
+
+  // ── Bơm thoát (RELAY_OUT / pump_drain_01) ────────────────────────────────
+  {
+    String url = "http://" + String(API_HOST) + ":" + String(API_PORT) +
+                 "/api/pump/latest?deviceId=pump_drain_01";
+    HTTPClient http;
+    http.begin(url);
+    http.addHeader("X-ESP32-Token", API_TOKEN);
+    int code = http.GET();
+    if (code == 200) {
+      String body = http.getString();
+      String commandTimestamp = extractJsonStringValue(body, "timestamp");
+      if (commandTimestamp.length() > 0 && commandTimestamp != lastDrainCommandTimestamp) {
+        lastDrainCommandTimestamp = commandTimestamp;
+        bool commanded = body.indexOf("\"isOn\":true") >= 0;
+        if (commanded && !drainOn) {
+          Serial.println("Lenh tu app: Bat bom thoat");
+          digitalWrite(RELAY_OUT, HIGH);
+          drainOn = true;
+          drainStartedAt = millis();
+        } else if (!commanded && drainOn) {
+          Serial.println("Lenh tu app: Tat bom thoat");
+          digitalWrite(RELAY_OUT, LOW);
+          drainOn = false;
+          unsigned long dur = (millis() - drainStartedAt) / 1000;
+          postPumpSession(dur, "manual", "pump_drain_01");
+        }
+      }
+    }
+    http.end();
+  }
 }
 
 void uploadToLocalApi() {
@@ -280,7 +304,8 @@ void uploadToLocalApi() {
   payload += "\"humidity\":" + String(latestHumidity, 1) + ",";
   payload += "\"temperature\":" + String(latestTemperature, 1) + ",";
   payload += "\"pressure\":" + String(safePressure, 1) + ",";
-  payload += "\"pumpOn\":" + String(pumpOn ? "true" : "false");
+  payload += "\"pumpOn\":" + String(pumpOn ? "true" : "false") + ",";
+  payload += "\"drainOn\":" + String(drainOn ? "true" : "false");
   payload += "}";
 
   int code = http.POST(payload);
@@ -296,10 +321,10 @@ void uploadToLocalApi() {
 }
 
 void controlPumpByRule() {
-  // Quy tắc demo: đất quá khô thì bật bơm 5 giây, tránh lặp lại liên tục.
+  // Quy tắc demo: đất quá khô thì bật bơm tưới 5 giây, tránh lặp lại liên tục.
   if (latestSoilRaw >= 1000 && !relayTriggered && !pumpOn) {
-    Serial.println("Soil RAW >= 1000 -> Bat relay 5 giay");
-    digitalWrite(RELAY_PIN, HIGH);
+    Serial.println("Soil RAW >= 1000 -> Bat relay tuoi 5 giay");
+    digitalWrite(RELAY_IN, HIGH);
     pumpOn = true;
     pumpStartedAt = millis();
     pumpTrigger = "auto";
@@ -307,11 +332,11 @@ void controlPumpByRule() {
   }
 
   if (pumpOn && pumpTrigger == "auto" && millis() - pumpStartedAt >= pumpDurationMs) {
-    digitalWrite(RELAY_PIN, LOW);
+    digitalWrite(RELAY_IN, LOW);
     pumpOn = false;
     unsigned long dur = (millis() - pumpStartedAt) / 1000;
-    postPumpSession(dur, pumpTrigger);
-    Serial.println("Tat relay");
+    postPumpSession(dur, pumpTrigger, String(DEVICE_ID));
+    Serial.println("Tat relay tuoi");
   }
 
   if (latestSoilRaw < 1000) {
@@ -328,8 +353,10 @@ void setup() {
 
   analogReadResolution(12);
 
-  pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW);   // relay off
+  pinMode(RELAY_IN, OUTPUT);
+  digitalWrite(RELAY_IN, LOW);
+  pinMode(RELAY_OUT, OUTPUT);
+  digitalWrite(RELAY_OUT, LOW);
 
   bmpFound = bmp.begin(0x76);
   if (!bmpFound) {

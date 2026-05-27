@@ -9,6 +9,7 @@ class IrrigationLog {
   final String triggeredBy; // 'manual', 'schedule', 'auto'
   final String? scheduleName;
   final String zone; // khu vực
+  final String pumpType; // 'irrigation' | 'drain'
 
   IrrigationLog({
     required this.id,
@@ -20,6 +21,7 @@ class IrrigationLog {
     required this.triggeredBy,
     this.scheduleName,
     required this.zone,
+    this.pumpType = 'irrigation',
   });
 
   Duration? get duration =>
@@ -61,6 +63,7 @@ class IrrigationLog {
       triggeredBy: json['triggeredBy'] as String,
       scheduleName: json['scheduleName'] as String?,
       zone: json['zone'] as String,
+      pumpType: (json['pumpType'] as String?) ?? 'irrigation',
     );
   }
 
@@ -75,6 +78,7 @@ class IrrigationLog {
       'triggeredBy': triggeredBy,
       'scheduleName': scheduleName,
       'zone': zone,
+      'pumpType': pumpType,
     };
   }
 }
