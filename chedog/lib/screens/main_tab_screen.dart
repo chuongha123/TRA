@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'home_dashboard.dart';
 import 'sensor_history_screen.dart';
-import 'schedule_screen.dart';
 import 'irrigation_history_screen.dart';
 import 'weather_screen.dart';
 
@@ -19,7 +18,6 @@ class _MainTabScreenState extends State<MainTabScreen> {
   late final List<Widget> _pages = const [
     HomeDashboard(showBottomNav: false),
     SensorHistoryScreen(showBackButton: false, showBottomNav: false),
-    ScheduleScreen(showBackButton: false, showBottomNav: false),
     IrrigationHistoryScreen(showBackButton: false, showBottomNav: false),
     WeatherScreen(),
   ];
@@ -47,11 +45,6 @@ class _MainTabScreenState extends State<MainTabScreen> {
             icon: Icon(Icons.sensors_outlined),
             activeIcon: Icon(Icons.sensors),
             label: 'Cảm biến',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.schedule_outlined),
-            activeIcon: Icon(Icons.schedule),
-            label: 'Lịch tưới',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.water_drop_outlined),

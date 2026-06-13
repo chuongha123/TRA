@@ -7,7 +7,6 @@ import '../models/irrigation_log.dart';
 import '../providers/sensor_provider.dart';
 import 'home_dashboard.dart';
 import 'sensor_history_screen.dart';
-import 'schedule_screen.dart';
 
 /// Irrigation History Screen - Lịch sử tưới nước
 class IrrigationHistoryScreen extends StatefulWidget {
@@ -26,7 +25,7 @@ class IrrigationHistoryScreen extends StatefulWidget {
 }
 
 class _IrrigationHistoryScreenState extends State<IrrigationHistoryScreen> {
-  final int _selectedIndex = 3;
+  final int _selectedIndex = 2;
   String _filterBy = 'all'; // 'all', 'manual', 'schedule', 'auto', 'drain'
 
   void _navigateByIndex(int index) {
@@ -48,14 +47,6 @@ class _IrrigationHistoryScreenState extends State<IrrigationHistoryScreen> {
         );
         break;
       case 2:
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const ScheduleScreen(showBackButton: false),
-          ),
-        );
-        break;
-      case 3:
         break;
     }
   }
@@ -163,11 +154,6 @@ class _IrrigationHistoryScreenState extends State<IrrigationHistoryScreen> {
                   icon: Icon(Icons.sensors_outlined),
                   activeIcon: Icon(Icons.sensors),
                   label: 'Cảm biến',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.schedule_outlined),
-                  activeIcon: Icon(Icons.schedule),
-                  label: 'Lịch tưới',
                 ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.water_drop_outlined),

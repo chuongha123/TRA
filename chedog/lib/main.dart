@@ -5,14 +5,12 @@ import 'package:provider/provider.dart';
 import 'constants/app_theme.dart';
 import 'providers/theme_provider.dart';
 import 'providers/sensor_provider.dart';
-import 'providers/schedule_provider.dart';
 import 'services/app_startup.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
 import 'screens/main_tab_screen.dart';
 import 'screens/device_detail_screen.dart';
-import 'screens/schedule_screen.dart';
 import 'screens/analytics_screen.dart';
 import 'screens/notification_screen.dart';
 import 'screens/profile_screen.dart';
@@ -38,13 +36,6 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       providers: [
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => SensorProvider()),
-        ChangeNotifierProxyProvider<SensorProvider, ScheduleProvider>(
-          create: (context) => ScheduleProvider(context.read<SensorProvider>()),
-          update: (context, sensorProvider, scheduleProvider) {
-            scheduleProvider?.updateSensorProvider(sensorProvider);
-            return scheduleProvider ?? ScheduleProvider(sensorProvider);
-          },
-        ),
       ],
       child: const _AppLifecycleBridge(),
     );
@@ -79,7 +70,6 @@ class _AppLifecycleBridgeState extends State<_AppLifecycleBridge>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed && mounted) {
       context.read<SensorProvider>().onAppResumed();
-      context.read<ScheduleProvider>().onAppResumed();
     }
   }
 
@@ -100,7 +90,6 @@ class _AppLifecycleBridgeState extends State<_AppLifecycleBridge>
             '/register': (context) => const RegisterScreen(),
             '/home': (context) => const MainTabScreen(),
             '/device-detail': (context) => const DeviceDetailScreen(),
-            '/schedule': (context) => const ScheduleScreen(),
             '/analytics': (context) => const AnalyticsScreen(),
             '/notifications': (context) => const NotificationScreen(),
             '/profile': (context) => const ProfileScreen(),

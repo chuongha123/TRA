@@ -7,7 +7,6 @@ import '../constants/app_constants.dart';
 import '../models/sensor_data.dart';
 import '../providers/sensor_provider.dart';
 import 'home_dashboard.dart';
-import 'schedule_screen.dart';
 import 'irrigation_history_screen.dart';
 
 /// Sensor History Screen - Xem lại lịch sử dữ liệu cảm biến
@@ -125,14 +124,6 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen>
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
-            builder: (_) => const ScheduleScreen(showBackButton: false),
-          ),
-        );
-        break;
-      case 3:
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
             builder: (_) =>
                 const IrrigationHistoryScreen(showBackButton: false),
           ),
@@ -198,11 +189,6 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen>
                   icon: Icon(Icons.sensors_outlined),
                   activeIcon: Icon(Icons.sensors),
                   label: 'Cảm biến',
-                ),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.schedule_outlined),
-                  activeIcon: Icon(Icons.schedule),
-                  label: 'Lịch tưới',
                 ),
                 BottomNavigationBarItem(
                   icon: Icon(Icons.water_drop_outlined),

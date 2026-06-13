@@ -5,7 +5,6 @@ import '../constants/app_colors.dart';
 import '../constants/app_constants.dart';
 import '../models/sensor_data.dart';
 import '../providers/sensor_provider.dart';
-import 'schedule_screen.dart';
 import 'sensor_history_screen.dart';
 import 'irrigation_history_screen.dart';
 
@@ -49,14 +48,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
         );
         break;
       case 2:
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const ScheduleScreen(showBackButton: false),
-          ),
-        );
-        break;
-      case 3:
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -858,11 +849,6 @@ class _HomeDashboardState extends State<HomeDashboard> {
           icon: Icon(Icons.sensors_outlined),
           activeIcon: Icon(Icons.sensors),
           label: 'Cảm biến',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.schedule_outlined),
-          activeIcon: Icon(Icons.schedule),
-          label: 'Lịch tưới',
         ),
         BottomNavigationBarItem(
           icon: Icon(Icons.water_drop_outlined),
