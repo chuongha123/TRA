@@ -134,6 +134,8 @@ class _HomeDashboardState extends State<HomeDashboard> {
             children: [
               _buildEnvironmentCard(sensor),
               const SizedBox(height: 16),
+              _buildSystemModeToggle(sensor),
+              const SizedBox(height: 16),
               _buildPumpButton(sensor),
               const SizedBox(height: 12),
               _buildDrainPumpButton(sensor),
@@ -143,6 +145,95 @@ class _HomeDashboardState extends State<HomeDashboard> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildSystemModeToggle(SensorProvider sensor) {
+    final isAuto = sensor.isAutoMode;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(AppConstants.radiusLarge),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.tune_rounded, color: AppColors.primary, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Chế độ hệ thống',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
+            ],
+          ),
+          Container(
+            height: 36,
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: Colors.grey.shade200,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              children: [
+                GestureDetector(
+                  onTap: () {
+                    if (!isAuto) sensor.toggleSystemMode();
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isAuto ? AppColors.primary : Colors.transparent,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Text(
+                      'Tự động',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: isAuto ? Colors.white : Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {
+                    if (isAuto) sensor.toggleSystemMode();
+                  },
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeInOut,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: !isAuto ? AppColors.primary : Colors.transparent,
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: Text(
+                      'Thủ công',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: !isAuto ? Colors.white : Colors.grey.shade700,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -160,7 +251,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
     return Column(
       children: [
         GestureDetector(
-          onTap: isToggling ? null : () => sensor.togglePump(),
+          onTap: (isToggling || sensor.isAutoMode) ? null : () => sensor.togglePump(),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -171,17 +262,23 @@ class _HomeDashboardState extends State<HomeDashboard> {
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     )
-                  : (isOn
-                      ? AppColors.primaryGradient
-                      : LinearGradient(
-                          colors: [Colors.grey.shade300, Colors.grey.shade400],
+                  : (sensor.isAutoMode
+                      ? LinearGradient(
+                          colors: [Colors.grey.shade300, Colors.grey.shade300],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                        )),
+                        )
+                      : (isOn
+                          ? AppColors.primaryGradient
+                          : LinearGradient(
+                              colors: [Colors.grey.shade300, Colors.grey.shade400],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ))),
               borderRadius: BorderRadius.circular(AppConstants.radiusLarge),
               boxShadow: [
                 BoxShadow(
-                  color: (isOn ? AppColors.primary : Colors.grey).withOpacity(0.35),
+                  color: (isOn ? (sensor.isAutoMode ? Colors.grey : AppColors.primary) : Colors.grey).withOpacity(0.35),
                   blurRadius: 12,
                   offset: const Offset(0, 6),
                 ),
@@ -231,7 +328,9 @@ class _HomeDashboardState extends State<HomeDashboard> {
                       Text(
                         isToggling
                             ? 'Vui lòng chờ...'
-                            : (isOn ? 'Nhấn để TẮT bơm' : 'Nhấn để BẬT bơm'),
+                            : (sensor.isAutoMode
+                                ? 'Tự động theo độ ẩm đất'
+                                : (isOn ? 'Nhấn để TẮT bơm' : 'Nhấn để BẬT bơm')),
                         style: TextStyle(color: secondaryColor, fontSize: 12),
                       ),
                     ],
@@ -308,7 +407,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
     return Column(
       children: [
         GestureDetector(
-          onTap: isToggling ? null : () => sensor.toggleDrainPump(),
+          onTap: (isToggling || sensor.isAutoMode) ? null : () => sensor.toggleDrainPump(),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 300),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -319,17 +418,23 @@ class _HomeDashboardState extends State<HomeDashboard> {
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     )
-                  : (isOn
-                      ? drainGradient
-                      : LinearGradient(
-                          colors: [Colors.grey.shade300, Colors.grey.shade400],
+                  : (sensor.isAutoMode
+                      ? LinearGradient(
+                          colors: [Colors.grey.shade300, Colors.grey.shade300],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                        )),
+                        )
+                      : (isOn
+                          ? drainGradient
+                          : LinearGradient(
+                              colors: [Colors.grey.shade300, Colors.grey.shade400],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ))),
               borderRadius: BorderRadius.circular(AppConstants.radiusLarge),
               boxShadow: [
                 BoxShadow(
-                  color: (isOn ? drainColor : Colors.grey).withOpacity(0.35),
+                  color: (isOn ? (sensor.isAutoMode ? Colors.grey : drainColor) : Colors.grey).withOpacity(0.35),
                   blurRadius: 12,
                   offset: const Offset(0, 6),
                 ),
@@ -379,7 +484,9 @@ class _HomeDashboardState extends State<HomeDashboard> {
                       Text(
                         isToggling
                             ? 'Vui lòng chờ...'
-                            : (isOn ? 'Nhấn để TẮT bơm thoát' : 'Nhấn để BẬT bơm thoát'),
+                            : (sensor.isAutoMode
+                                ? 'Tự động theo mực nước'
+                                : (isOn ? 'Nhấn để TẮT bơm thoát' : 'Nhấn để BẬT bơm thoát')),
                         style: TextStyle(color: secondaryColor, fontSize: 12),
                       ),
                     ],
@@ -493,9 +600,22 @@ class _HomeDashboardState extends State<HomeDashboard> {
                   ],
                 ),
                 const SizedBox(height: 8),
-                _buildEnvironmentInfo(
-                  Icons.speed,
-                  'Áp suất: ${sensor.pressure.toStringAsFixed(0)} hPa',
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildEnvironmentInfo(
+                        Icons.speed,
+                        'Áp suất: ${sensor.pressure.toStringAsFixed(0)} hPa',
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildEnvironmentInfo(
+                        Icons.waves,
+                        'Nước: ${sensor.waterRaw.toStringAsFixed(1)}%',
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -582,6 +702,15 @@ class _HomeDashboardState extends State<HomeDashboard> {
           icon: Icons.compress,
           color: const Color(0xFF6A1B9A),
           points: sensor.getHistoricalData('pressure', '24h'),
+        ),
+        const SizedBox(height: 10),
+        _buildSensorChartCard(
+          title: 'Mực nước',
+          sensorType: 'water_raw',
+          value: '${sensor.waterRaw.toStringAsFixed(1)}%',
+          icon: Icons.waves,
+          color: const Color(0xFF00ACC1),
+          points: sensor.getHistoricalData('water_raw', '24h'),
         ),
       ],
     );

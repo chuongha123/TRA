@@ -1,11 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'constants/app_theme.dart';
 import 'providers/theme_provider.dart';
 import 'providers/sensor_provider.dart';
 import 'providers/schedule_provider.dart';
-import 'services/background_schedule_service.dart';
-import 'services/notification_service.dart';
+import 'services/app_startup.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/register_screen.dart';
@@ -18,10 +19,8 @@ import 'screens/profile_screen.dart';
 import 'screens/sensor_history_screen.dart';
 import 'screens/irrigation_history_screen.dart';
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  await NotificationService().initialize();
-  await BackgroundScheduleService.initialize();
   runApp(const MyApp());
 }
 
@@ -65,6 +64,9 @@ class _AppLifecycleBridgeState extends State<_AppLifecycleBridge>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(initializeAppServices());
+    });
   }
 
   @override

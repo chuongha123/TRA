@@ -88,6 +88,7 @@ app.post('/api/sensors/ingest', async (req, res) => {
       temperature,
       pressure,
       pumpOn,
+      water_raw,
     } = req.body || {};
 
     if (!deviceId) {
@@ -103,6 +104,7 @@ app.post('/api/sensors/ingest', async (req, res) => {
       temperature: temperature ?? null,
       pressure: pressure ?? null,
       pump_on: !!pumpOn,
+      water_raw: water_raw ?? null,
       created_at: new Date(),
     });
 
@@ -145,6 +147,7 @@ app.get('/api/sensors/latest', async (req, res) => {
       temperature: Number(r.temperature ?? 0),
       pressure: Number(r.pressure ?? 0),
       pumpOn: !!r.pump_on,
+      water_raw: r.water_raw != null ? Number(r.water_raw) : null,
       timestamp: r.created_at,
     });
   } catch (error) {
@@ -158,7 +161,7 @@ app.get('/api/sensors/history', async (req, res) => {
     const period = String(req.query.period || '24h');
     const deviceId = String(req.query.deviceId || 'esp32_garden_01');
 
-    const allowedTypes = new Set(['soil_moisture', 'humidity', 'temperature', 'pressure']);
+    const allowedTypes = new Set(['soil_moisture', 'humidity', 'temperature', 'pressure', 'water_raw']);
     if (!allowedTypes.has(type)) {
       return res.status(400).json({ ok: false, error: 'Invalid type' });
     }
@@ -552,6 +555,53 @@ app.post('/api/alerts/delete-all', async (req, res) => {
     const result = await db.alerts.deleteMany({ device_id: deviceId });
 
     return res.json({ ok: true, deletedCount: result.deletedCount });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+// GET system settings
+app.get('/api/settings', async (req, res) => {
+  try {
+    const db = getDb();
+    let s = await db.db.collection('settings').findOne({ key: 'system_config' });
+    if (!s) {
+      s = {
+        key: 'system_config',
+        systemMode: 'auto',
+        soilMoistureThreshold: 30.0,
+        waterLevelThreshold: 100.0,
+      };
+      await db.db.collection('settings').insertOne(s);
+    }
+    return res.json({
+      systemMode: s.systemMode,
+      soilMoistureThreshold: String(s.soilMoistureThreshold),
+      waterLevelThreshold: String(s.waterLevelThreshold),
+    });
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
+// POST system settings
+app.post('/api/settings', async (req, res) => {
+  try {
+    const { systemMode, soilMoistureThreshold, waterLevelThreshold } = req.body || {};
+    const db = getDb();
+
+    const update = {};
+    if (systemMode !== undefined) update.systemMode = systemMode;
+    if (soilMoistureThreshold !== undefined) update.soilMoistureThreshold = Number(soilMoistureThreshold);
+    if (waterLevelThreshold !== undefined) update.waterLevelThreshold = Number(waterLevelThreshold);
+
+    await db.db.collection('settings').updateOne(
+      { key: 'system_config' },
+      { $set: update },
+      { upsert: true }
+    );
+
+    return res.json({ ok: true });
   } catch (error) {
     return res.status(500).json({ ok: false, error: String(error.message || error) });
   }

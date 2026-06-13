@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_constants.dart';
@@ -367,6 +367,21 @@ class _NotificationScreenState extends State<NotificationScreen>
             ),
             const SizedBox(height: 12),
             _buildSoilMoistureThresholdCard(context: context, sensor: sensor),
+            const SizedBox(height: 12),
+            _buildThresholdCard(
+              context: context,
+              sensor: sensor,
+              type: 'water_raw',
+              label: 'Mực nước cảnh báo',
+              icon: Icons.waves,
+              color: const Color(0xFF00ACC1),
+              unit: '%',
+              alertType: 'above',
+              min: 10,
+              max: 100,
+              divisions: 90,
+              description: 'Cảnh báo và tự kích hoạt bơm thoát khi mực nước cao hơn ngưỡng',
+            ),
             const SizedBox(height: 12),
             _buildThresholdCard(
               context: context,

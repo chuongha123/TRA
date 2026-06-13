@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -11,6 +12,7 @@ class BackgroundScheduleService {
   static const String _deviceId = 'esp32_garden_01';
   static const MethodChannel _channel =
       MethodChannel('com.example.Tra/background_alarm');
+  static const Duration _channelTimeout = Duration(seconds: 5);
 
   static bool _initialized = false;
 
@@ -20,7 +22,7 @@ class BackgroundScheduleService {
     }
 
     if (!_initialized) {
-      await _channel.invokeMethod<void>(
+      await _invokeChannel(
         'initialize',
         <String, dynamic>{
           'apiBaseUrl': AppConstants.apiBaseUrl,
@@ -74,7 +76,7 @@ class BackgroundScheduleService {
   static Future<void> _syncSchedulesInternal(
     List<Map<String, dynamic>> schedules,
   ) async {
-    await _channel.invokeMethod<void>(
+    await _invokeChannel(
       'syncSchedules',
       <String, dynamic>{
         'apiBaseUrl': AppConstants.apiBaseUrl,
@@ -82,5 +84,22 @@ class BackgroundScheduleService {
         'schedules': schedules,
       },
     );
+  }
+
+  static Future<void> _invokeChannel(
+    String method,
+    Map<String, dynamic> arguments,
+  ) async {
+    try {
+      await _channel
+          .invokeMethod<void>(method, arguments)
+          .timeout(_channelTimeout);
+    } on TimeoutException {
+      // Avoid blocking UI if the Android alarm channel is slow or stuck.
+    } on PlatformException {
+      // Native handler missing or rejected the call.
+    } catch (_) {
+      // Best-effort background sync.
+    }
   }
 }

@@ -61,6 +61,7 @@ class SensorProvider with ChangeNotifier {
     'humidity': 0.0,
     'temperature': 0.0,
     'pressure': 0.0,
+    'water_raw': 0.0,
   };
 
   Map<String, double> get currentReadings =>
@@ -70,6 +71,7 @@ class SensorProvider with ChangeNotifier {
   double get humidity => _currentReadings['humidity']!;
   double get temperature => _currentReadings['temperature']!;
   double get pressure => _currentReadings['pressure']!;
+  double get waterRaw => _currentReadings['water_raw']!;
 
   // ─── Ngưỡng cảnh báo ──────────────────────────────────────────────────────
   final Map<String, double> _thresholds = {
@@ -78,6 +80,7 @@ class SensorProvider with ChangeNotifier {
     'humidity': 40.0,           // % - dưới ngưỡng => cảnh báo
     'temperature': 38.0,        // °C - trên ngưỡng => cảnh báo
     'pressure': 1000.0,         // hPa - dưới ngưỡng => cảnh báo
+    'water_raw': 100.0,         // % - trên ngưỡng => cảnh báo
   };
 
   Map<String, double> get thresholds => Map.unmodifiable(_thresholds);
@@ -98,6 +101,10 @@ class SensorProvider with ChangeNotifier {
   final List<IrrigationLog> _irrigationLogs = [];
   List<IrrigationLog> get irrigationLogs => List.unmodifiable(_irrigationLogs);
 
+  // ─── Chế độ hệ thống (Tự động / Thủ công) ─────────────────────────────────
+  bool _isAutoMode = true;
+  bool get isAutoMode => _isAutoMode;
+
   // ─── Dữ liệu lịch sử cảm biến ─────────────────────────────────────────────
   final Map<String, List<ChartDataPoint>> _historicalData = {};
 
@@ -107,17 +114,23 @@ class SensorProvider with ChangeNotifier {
       _fetchLatestReadings();
       _fetchLatestPumpState();
       _fetchIrrigationSessions();
+      fetchSystemSettings();
     });
     _refreshTimer = Timer.periodic(
       const Duration(seconds: 5),
       (_) {
         _fetchLatestReadings();
         _fetchLatestPumpState();
+        fetchSystemSettings();
       },
     );
 
     _scheduleDailyWeatherCheck();
-    _checkWeatherIfMissedToday();
+    // Defer GPS/weather work so cold start stays responsive on emulators.
+    Future<void>.delayed(
+      const Duration(seconds: 3),
+      _checkWeatherIfMissedToday,
+    );
   }
 
   @override
@@ -237,6 +250,9 @@ class SensorProvider with ChangeNotifier {
     _thresholds[type] = value;
     unawaited(_saveThresholds());
     _evaluateThresholdAlerts();
+    if (type == 'soil_moisture' || type == 'water_raw') {
+      unawaited(_updateSettingsOnServer());
+    }
     notifyListeners();
   }
 
@@ -566,6 +582,8 @@ class SensorProvider with ChangeNotifier {
           (data['temperature'] as num?)?.toDouble() ?? _currentReadings['temperature']!;
       _currentReadings['pressure'] =
           (data['pressure'] as num?)?.toDouble() ?? _currentReadings['pressure']!;
+      final waterRawValue = (data['water_raw'] as num?)?.toDouble() ?? 0.0;
+      _currentReadings['water_raw'] = _rawToWaterPercent(waterRawValue);
 
       _evaluateThresholdAlerts();
 
@@ -648,6 +666,15 @@ class SensorProvider with ChangeNotifier {
     );
 
     _checkSoilMoistureHigh();
+
+    _checkThreshold(
+      type: 'water_raw',
+      title: 'Mực nước dâng cao',
+      messageBuilder: (value, threshold) =>
+          'Mực nước hiện tại là ${value.toStringAsFixed(1)}% - vượt ngưỡng cảnh báo ${threshold.toStringAsFixed(1)}%',
+      zone: 'Vườn rau A',
+      isTriggered: (value, threshold) => value > threshold,
+    );
 
     _checkAutoIrrigation();
   }
@@ -808,9 +835,13 @@ class SensorProvider with ChangeNotifier {
             final localTime = parsed != null
                 ? (parsed.isUtc ? parsed.toLocal() : parsed)
                 : DateTime.now();
+            double val = (e['value'] as num?)?.toDouble() ?? 0.0;
+            if (type == 'water_raw') {
+              val = _rawToWaterPercent(val);
+            }
             return ChartDataPoint(
               time: localTime,
-              value: (e['value'] as num?)?.toDouble() ?? 0,
+              value: val,
             );
           })
           .toList();
@@ -1086,6 +1117,62 @@ class SensorProvider with ChangeNotifier {
     } finally {
       _isFetchingSessions = false;
     }
+  }
+
+  Future<void> fetchSystemSettings() async {
+    try {
+      final response = await http
+          .get(Uri.parse('$_baseUrl/settings'))
+          .timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as Map<String, dynamic>;
+        _isAutoMode = data['systemMode'] == 'auto';
+        
+        final soilThresh = double.tryParse((data['soilMoistureThreshold'] ?? '').toString());
+        if (soilThresh != null) {
+          _thresholds['soil_moisture'] = soilThresh;
+        }
+
+        final waterThresh = double.tryParse((data['waterLevelThreshold'] ?? '').toString());
+        if (waterThresh != null) {
+          _thresholds['water_raw'] = waterThresh;
+        }
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error fetching settings: $e');
+    }
+  }
+
+  Future<void> _updateSettingsOnServer() async {
+    try {
+      await http.post(
+        Uri.parse('$_baseUrl/settings'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'systemMode': _isAutoMode ? 'auto' : 'manual',
+          'soilMoistureThreshold': _thresholds['soil_moisture'],
+          'waterLevelThreshold': _thresholds['water_raw'],
+        }),
+      ).timeout(const Duration(seconds: 4));
+    } catch (e) {
+      print('Error saving settings: $e');
+    }
+  }
+
+  Future<void> toggleSystemMode() async {
+    _isAutoMode = !_isAutoMode;
+    notifyListeners();
+    await _updateSettingsOnServer();
+  }
+
+  double _rawToWaterPercent(double raw) {
+    const dryRaw = 0.0;
+    const wetRaw = 2500.0; // Ngưỡng 2500 thô tương ứng với 100% nước đầy/báo động
+    if (raw <= dryRaw) return 0.0;
+    if (raw >= wetRaw) return 100.0;
+    return ((raw - dryRaw) * 100.0) / (wetRaw - dryRaw);
   }
 
 }

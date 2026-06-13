@@ -38,48 +38,56 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen>
     'humidity',
     'temperature',
     'pressure',
+    'water_raw',
   ];
   static const _sensorLabels = {
     'soil_moisture': 'Độ ẩm đất',
     'humidity': 'Độ ẩm KK',
     'temperature': 'Nhiệt độ',
     'pressure': 'Áp suất',
+    'water_raw': 'Mực nước',
   };
   static const _sensorTabLabels = {
     'soil_moisture': 'Đất',
     'humidity': 'KK',
     'temperature': 'Nhiệt',
     'pressure': 'Áp suất',
+    'water_raw': 'Nước',
   };
   static const _sensorUnits = {
     'soil_moisture': '%',
     'humidity': '%',
     'temperature': '°C',
     'pressure': 'hPa',
+    'water_raw': '%',
   };
   static const _sensorColors = {
     'soil_moisture': Color(0xFF1565C0),
     'humidity': Color(0xFF00838F),
     'temperature': Color(0xFFE65100),
     'pressure': Color(0xFF6A1B9A),
+    'water_raw': Color(0xFF00ACC1),
   };
   static const _sensorIcons = {
     'soil_moisture': Icons.water_drop,
     'humidity': Icons.air,
     'temperature': Icons.thermostat,
     'pressure': Icons.compress,
+    'water_raw': Icons.waves,
   };
   static const _sensorMinY = {
     'soil_moisture': 0.0,
     'humidity': 0.0,
     'temperature': 10.0,
     'pressure': 990.0,
+    'water_raw': 0.0,
   };
   static const _sensorMaxY = {
     'soil_moisture': 100.0,
     'humidity': 100.0,
     'temperature': 45.0,
     'pressure': 1035.0,
+    'water_raw': 100.0,
   };
 
   @override
@@ -89,7 +97,7 @@ class _SensorHistoryScreenState extends State<SensorHistoryScreen>
         ? _sensorTypes.indexOf(widget.initialSensorType!)
         : 0;
     _tabController = TabController(
-      length: 4,
+      length: 5,
       vsync: this,
       initialIndex: initialIndex >= 0 ? initialIndex : 0,
     );
