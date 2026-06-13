@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 import '../constants/app_constants.dart';
@@ -28,13 +30,45 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
       
-      // TODO: Implement login logic with AuthService
-      await Future.delayed(const Duration(seconds: 2));
-      
-      setState(() => _isLoading = false);
-      
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
+      try {
+        final response = await http.post(
+          Uri.parse('${AppConstants.apiBaseUrl}/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'username': _usernameController.text,
+            'password': _passwordController.text,
+          }),
+        ).timeout(const Duration(seconds: 10));
+
+        final responseData = jsonDecode(response.body);
+
+        if (response.statusCode == 200 && responseData['ok'] == true) {
+          setState(() => _isLoading = false);
+          if (mounted) {
+            Navigator.pushReplacementNamed(context, '/home');
+          }
+        } else {
+          setState(() => _isLoading = false);
+          if (mounted) {
+            final String errorMessage = responseData['error'] ?? 'Đăng nhập thất bại';
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(errorMessage),
+                backgroundColor: AppColors.error,
+              ),
+            );
+          }
+        }
+      } catch (e) {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Không thể kết nối tới máy chủ. Vui lòng kiểm tra lại mạng.'),
+              backgroundColor: AppColors.error,
+            ),
+          );
+        }
       }
     }
   }

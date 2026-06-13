@@ -560,6 +560,30 @@ app.post('/api/alerts/delete-all', async (req, res) => {
   }
 });
 
+// User Login API
+app.post('/api/login', async (req, res) => {
+  try {
+    const { username, password } = req.body || {};
+    if (!username || !password) {
+      return res.status(400).json({ ok: false, error: 'Username and password are required' });
+    }
+
+    const db = getDb();
+    const user = await db.db.collection('users').findOne({ 
+      username: username.trim(),
+      password: password
+    });
+
+    if (user) {
+      return res.json({ ok: true, message: 'Login successful' });
+    } else {
+      return res.status(401).json({ ok: false, error: 'Tài khoản hoặc mật khẩu không chính xác' });
+    }
+  } catch (error) {
+    return res.status(500).json({ ok: false, error: String(error.message || error) });
+  }
+});
+
 // GET system settings
 app.get('/api/settings', async (req, res) => {
   try {
@@ -607,9 +631,27 @@ app.post('/api/settings', async (req, res) => {
   }
 });
 
+async function seedUser() {
+  try {
+    const db = getDb();
+    const user = await db.db.collection('users').findOne({ username: 'thanhtra' });
+    if (!user) {
+      await db.db.collection('users').insertOne({
+        username: 'thanhtra',
+        password: 'nongnghiepthongminh@',
+        created_at: new Date()
+      });
+      console.log('Default user seeded: thanhtra');
+    }
+  } catch (error) {
+    console.error('Error seeding user:', error);
+  }
+}
+
 async function start() {
   try {
     await initDb();
+    await seedUser();
     app.listen(port, () => {
       console.log(`Local API listening on http://localhost:${port}`);
     });
