@@ -73,7 +73,7 @@ bool bmeFound = false;
 
 bool pumpOn = false;
 unsigned long pumpStartedAt = 0;
-const unsigned long pumpDurationMs = 5000;
+const unsigned long maxPumpDurationMs = 60000; // Gioi han thoi gian bom an toan (60 giay)
 String pumpTrigger = "auto";
 String lastPumpCommandTimestamp = "";
 
@@ -560,7 +560,21 @@ void tickPendingRestart() {
 }
 
 void checkFactoryResetButton() {
-  bool pressed = digitalRead(BUTTON_PIN) == LOW;
+  static unsigned long lastStableChange = 0;
+  static bool lastRawState = HIGH;
+  static bool debouncedState = HIGH;
+
+  bool rawState = digitalRead(BUTTON_PIN);
+  if (rawState != lastRawState) {
+    lastStableChange = millis();
+    lastRawState = rawState;
+  }
+
+  if (millis() - lastStableChange >= 200) { // Loc nhieu 200ms
+    debouncedState = rawState;
+  }
+
+  bool pressed = (debouncedState == LOW);
 
   if (pressed) {
     if (!buttonWasPressed) {
@@ -723,7 +737,7 @@ void readSensors() {
     Serial.println("BME280 - Khong co du lieu");
   }
 
-  latestSoilRaw = readSoilRaw();
+  latestSoilRaw = readSoilRaw() / 4; // Quy doi tu dai 12-bit (0-4095) ve 10-bit (0-1023) tuong thich SoilDryRaw/SoilWetRaw
   latestSoilPercent = rawToPercent(latestSoilRaw);
 
   Serial.print("Do am dat - Raw: ");
@@ -978,25 +992,24 @@ void controlPumpByRule() {
   // LUẬT TỰ ĐỘNG BƠM TƯỚI (IN)
   if (
     !isnan(latestSoilPercent) &&
-    latestSoilPercent <= soilPumpOnPercent &&
-    !relayTriggered &&
+    latestSoilPercent < soilPumpOnPercent &&
     !pumpOn
   ) {
-    Serial.print("Do am dat <= ");
+    Serial.print("Do am dat < ");
     Serial.print(soilPumpOnPercent, 0);
-    Serial.println("% -> Bat relay tuoi 5 giay");
+    Serial.println("% -> Bat relay tuoi");
 
     digitalWrite(RELAY_IN, HIGH);
     pumpOn = true;
     pumpStartedAt = millis();
     pumpTrigger = "auto";
-    relayTriggered = true;
   }
 
   if (
     pumpOn &&
     pumpTrigger == "auto" &&
-    millis() - pumpStartedAt >= pumpDurationMs
+    ((!isnan(latestSoilPercent) && latestSoilPercent >= soilPumpOnPercent) ||
+     (millis() - pumpStartedAt >= maxPumpDurationMs))
   ) {
     digitalWrite(RELAY_IN, LOW);
     pumpOn = false;
@@ -1004,14 +1017,13 @@ void controlPumpByRule() {
     unsigned long dur = (millis() - pumpStartedAt) / 1000;
     postPumpSession(dur, pumpTrigger, String(DEVICE_ID));
 
-    Serial.println("Tat relay tuoi (auto)");
-  }
-
-  if (
-    !isnan(latestSoilPercent) &&
-    latestSoilPercent >= (soilPumpOnPercent + 10.0f)
-  ) {
-    relayTriggered = false;
+    if (millis() - pumpStartedAt >= maxPumpDurationMs) {
+      Serial.println("Tat relay tuoi (auto) do dat thoi gian bom an toan toi da!");
+    } else {
+      Serial.print("Do am dat da dat nguong >= ");
+      Serial.print(soilPumpOnPercent, 0);
+      Serial.println("% -> Tat relay tuoi (auto)");
+    }
   }
 
   // LUẬT TỰ ĐỘNG BƠM THOÁT (OUT) THEO CẢM BIẾN MỰC NƯỚC
