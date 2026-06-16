@@ -333,13 +333,12 @@ class _DeviceDetailScreenState extends State<DeviceDetailScreen> {
         ),
         const SizedBox(height: 16),
         GridView.count(
-          crossAxisCount: 3,
+          crossAxisCount: 2,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           mainAxisSpacing: 12,
           crossAxisSpacing: 12,
           children: [
-            _buildActionCard(Icons.schedule, 'Schedule', () {}),
             _buildActionCard(Icons.history, 'History', () {}),
             _buildActionCard(Icons.settings, 'Settings', () {}),
           ],

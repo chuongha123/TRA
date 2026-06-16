@@ -564,7 +564,10 @@ app.post('/api/alerts/delete-all', async (req, res) => {
 app.post('/api/login', async (req, res) => {
   try {
     const { username, password } = req.body || {};
+    console.log(`[HTTP POST /api/login] Attempt with username: "${username}"`);
+    
     if (!username || !password) {
+      console.log(' -> Rejected: Missing username or password');
       return res.status(400).json({ ok: false, error: 'Username and password are required' });
     }
 
@@ -575,11 +578,14 @@ app.post('/api/login', async (req, res) => {
     });
 
     if (user) {
+      console.log(' -> Successful login!');
       return res.json({ ok: true, message: 'Login successful' });
     } else {
+      console.log(' -> Failed login: Incorrect username or password');
       return res.status(401).json({ ok: false, error: 'Tài khoản hoặc mật khẩu không chính xác' });
     }
   } catch (error) {
+    console.error(' -> Error during login:', error);
     return res.status(500).json({ ok: false, error: String(error.message || error) });
   }
 });

@@ -26,6 +26,10 @@
 #define BUTTON_PIN   25
 #define CONFIG_LED   33
 
+// Cấu hình mức logic Relay (Active-HIGH hoặc Active-LOW)
+#define RELAY_ON     HIGH  // Đổi thành LOW nếu dùng module Relay kích mức Thấp (Active-LOW)
+#define RELAY_OFF    LOW   // Đổi thành HIGH nếu dùng module Relay kích mức Thấp (Active-LOW)
+
 #define I2C_SDA      21
 #define I2C_SCL      22
 
@@ -456,8 +460,8 @@ void enterConfigMode() {
   ntpSynced = false;
   ntpSyncRequested = false;
 
-  digitalWrite(RELAY_IN, LOW);
-  digitalWrite(RELAY_OUT, LOW);
+  digitalWrite(RELAY_IN, RELAY_OFF);
+  digitalWrite(RELAY_OUT, RELAY_OFF);
   pumpOn = false;
   drainOn = false;
 
@@ -754,8 +758,15 @@ void readSensors() {
   }
   latestWaterRaw = (int)(waterSum / 5);
 
+  float latestWaterPercent = ((float)latestWaterRaw * 100.0f) / 2500.0f;
+  if (latestWaterPercent < 0.0f) latestWaterPercent = 0.0f;
+  if (latestWaterPercent > 100.0f) latestWaterPercent = 100.0f;
+
   Serial.print("Muc nuoc - Raw: ");
-  Serial.println(latestWaterRaw);
+  Serial.print(latestWaterRaw);
+  Serial.print(" | Percent: ");
+  Serial.print(latestWaterPercent, 1);
+  Serial.println(" %");
 }
 
 void postPumpSession(
@@ -836,13 +847,13 @@ void pollPumpCommand() {
 
         if (commanded && !pumpOn) {
           Serial.println("Lenh tu app: Bat bom tuoi");
-          digitalWrite(RELAY_IN, HIGH);
+          digitalWrite(RELAY_IN, RELAY_ON);
           pumpOn = true;
           pumpStartedAt = millis();
           pumpTrigger = "manual";
         } else if (!commanded && pumpOn) {
           Serial.println("Lenh tu app: Tat bom tuoi");
-          digitalWrite(RELAY_IN, LOW);
+          digitalWrite(RELAY_IN, RELAY_OFF);
           pumpOn = false;
 
           unsigned long dur = (millis() - pumpStartedAt) / 1000;
@@ -882,12 +893,12 @@ void pollPumpCommand() {
 
         if (commanded && !drainOn) {
           Serial.println("Lenh tu app: Bat bom thoat");
-          digitalWrite(RELAY_OUT, HIGH);
+          digitalWrite(RELAY_OUT, RELAY_ON);
           drainOn = true;
           drainStartedAt = millis();
         } else if (!commanded && drainOn) {
           Serial.println("Lenh tu app: Tat bom thoat");
-          digitalWrite(RELAY_OUT, LOW);
+          digitalWrite(RELAY_OUT, RELAY_OFF);
           drainOn = false;
 
           unsigned long dur = (millis() - drainStartedAt) / 1000;
@@ -990,6 +1001,7 @@ void controlPumpByRule() {
   }
 
   // LUẬT TỰ ĐỘNG BƠM TƯỚI (IN)
+  // LUẬT TỰ ĐỘNG BƠM TƯỚI (IN)
   if (
     !isnan(latestSoilPercent) &&
     latestSoilPercent < soilPumpOnPercent &&
@@ -999,19 +1011,30 @@ void controlPumpByRule() {
     Serial.print(soilPumpOnPercent, 0);
     Serial.println("% -> Bat relay tuoi");
 
-    digitalWrite(RELAY_IN, HIGH);
+    digitalWrite(RELAY_IN, RELAY_ON);
     pumpOn = true;
     pumpStartedAt = millis();
     pumpTrigger = "auto";
   }
 
+  if (pumpOn && pumpTrigger == "auto") {
+    Serial.print("[Giam sat bom] Do am dat: ");
+    Serial.print(latestSoilPercent, 1);
+    Serial.print("% | Nguong tat: ");
+    Serial.print(soilPumpOnPercent, 0);
+    Serial.print("% | Da bom: ");
+    Serial.print((millis() - pumpStartedAt) / 1000);
+    Serial.println("s");
+  }
+
+  // TỰ ĐỘNG NGẮT BƠM TỰ ĐỘNG (AUTO) KHI ĐẠT NGƯỠNG HOẶC QUÁ GIỜ
   if (
     pumpOn &&
     pumpTrigger == "auto" &&
     ((!isnan(latestSoilPercent) && latestSoilPercent >= soilPumpOnPercent) ||
      (millis() - pumpStartedAt >= maxPumpDurationMs))
   ) {
-    digitalWrite(RELAY_IN, LOW);
+    digitalWrite(RELAY_IN, RELAY_OFF);
     pumpOn = false;
 
     unsigned long dur = (millis() - pumpStartedAt) / 1000;
@@ -1026,6 +1049,16 @@ void controlPumpByRule() {
     }
   }
 
+  // CƠ CHẾ CỨU HỘ AN TOÀN (SAFETY OVERRIDE): Tự động ngắt tất cả chế độ bơm (kể cả thủ công) nếu độ ẩm đất đạt >= 85% để chống ngập úng!
+  if (pumpOn && !isnan(latestSoilPercent) && latestSoilPercent >= 85.0f) {
+    Serial.println("CANH BAO AN TOAN: Do am dat dat >= 85% -> Tu dong NGAT PUMP de chong ngap!");
+    digitalWrite(RELAY_IN, RELAY_OFF);
+    pumpOn = false;
+
+    unsigned long dur = (millis() - pumpStartedAt) / 1000;
+    postPumpSession(dur, "safety_cutoff", String(DEVICE_ID));
+  }
+
   // LUẬT TỰ ĐỘNG BƠM THOÁT (OUT) THEO CẢM BIẾN MỰC NƯỚC
   // Quy đổi mực nước sang %
   float latestWaterPercent = ((float)latestWaterRaw * 100.0f) / 2500.0f;
@@ -1036,7 +1069,7 @@ void controlPumpByRule() {
     Serial.print(latestWaterPercent, 1);
     Serial.println("% -> Tu dong bat bom thoat");
 
-    digitalWrite(RELAY_OUT, HIGH);
+    digitalWrite(RELAY_OUT, RELAY_ON);
     drainOn = true;
     drainStartedAt = millis();
   }
@@ -1044,7 +1077,7 @@ void controlPumpByRule() {
   // Tự động ngắt bơm thoát khi mực nước hạ xuống an toàn (Dưới ngưỡng bật 16%)
   if (drainOn && latestWaterPercent < (waterLevelThresholdPercent - 16.0f)) {
     Serial.println("Nuoc da rut an toan -> Tu dong tat bom thoat");
-    digitalWrite(RELAY_OUT, LOW);
+    digitalWrite(RELAY_OUT, RELAY_OFF);
     drainOn = false;
 
     unsigned long dur = (millis() - drainStartedAt) / 1000;
@@ -1063,10 +1096,10 @@ void setup() {
   digitalWrite(CONFIG_LED, LOW);
 
   pinMode(RELAY_IN, OUTPUT);
-  digitalWrite(RELAY_IN, LOW);
+  digitalWrite(RELAY_IN, RELAY_OFF);
 
   pinMode(RELAY_OUT, OUTPUT);
-  digitalWrite(RELAY_OUT, LOW);
+  digitalWrite(RELAY_OUT, RELAY_OFF);
 
   loadConfig();
 
